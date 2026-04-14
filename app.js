@@ -24,11 +24,19 @@ const navs = {
     settings: document.getElementById('nav-settings')
 };
 
+function closeMobileSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    if (sidebar) sidebar.classList.remove('active');
+    if (overlay) overlay.classList.remove('active');
+}
+
 function switchView(viewName) {
     Object.values(views).forEach(v => v.style.display = 'none');
     Object.values(navs).forEach(n => n.classList.remove('active'));
     views[viewName].style.display = 'block';
-    navs[viewName].classList.add('active');
+    if(navs[viewName]) navs[viewName].classList.add('active');
+    closeMobileSidebar();
 }
 
 document.getElementById('nav-dashboard').addEventListener('click', () => { switchView('dashboard'); loadInvoices(1); });
@@ -748,6 +756,19 @@ window.addEventListener('DOMContentLoaded', async () => {
     
     const btnLogout = document.getElementById('btn-logout');
     if (btnLogout) btnLogout.addEventListener('click', window.handleLogout);
+
+    // Mobile Sidebar Setup
+    const mobileBtn = document.getElementById('mobile-menu-btn');
+    const overlay = document.getElementById('sidebar-overlay');
+    const sidebar = document.getElementById('sidebar');
+
+    if (mobileBtn && overlay && sidebar) {
+        mobileBtn.addEventListener('click', () => {
+            sidebar.classList.toggle('active');
+            overlay.classList.toggle('active');
+        });
+        overlay.addEventListener('click', closeMobileSidebar);
+    }
 
     // Initial session check
     try {
