@@ -25,7 +25,8 @@ body { background-color: var(--bg-color); color: var(--text-main); line-height: 
 .app-container { display: flex; height: 100vh; overflow: hidden; }
 
 .sidebar { width: 260px; background: var(--surface); border-right: 1px solid var(--border); padding: 24px; display: flex; flex-direction: column; position: relative;}
-.brand { display: flex; align-items: center; gap: 12px; margin-bottom: 40px; }
+.brand { display: flex; align-items: center; gap: 12px; margin-bottom: 40px; cursor: pointer; transition: opacity 0.2s;}
+.brand:hover { opacity: 0.8; }
 .brand .logo { width: 40px; height: 40px; background: linear-gradient(135deg, var(--primary), #818cf8); color: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px; box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3); }
 .brand h2 { font-size: 20px; font-weight: 700; color: var(--text-main); letter-spacing: -0.5px;}
 
@@ -136,7 +137,8 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79, 70, 2
     
     /* Show Mobile Header */
     .mobile-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; background: var(--surface); border-bottom: 1px solid var(--border); z-index: 90; }
-    .mobile-brand { display: flex; align-items: center; gap: 12px; }
+    .mobile-brand { display: flex; align-items: center; gap: 12px; cursor: pointer; transition: opacity 0.2s; }
+    .mobile-brand:hover { opacity: 0.8; }
     .mobile-brand .logo { width: 32px; height: 32px; background: linear-gradient(135deg, var(--primary), #818cf8); color: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3); }
     .mobile-brand h2 { font-size: 18px; font-weight: 700; color: var(--text-main); margin: 0; letter-spacing: -0.5px;}
     .btn-icon { background: none; border: none; font-size: 24px; color: var(--text-main); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: color 0.2s;}

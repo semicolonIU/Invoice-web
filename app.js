@@ -51,6 +51,8 @@ function showCreate(type = 'normal') {
     switchView('create'); 
     resetForm(); 
     
+    // Add logic to hide sidebar just in case
+    closeMobileSidebar();
     const isRental = type === 'rental';
     document.getElementById('inv-type').value = type;
     document.getElementById('form-title').textContent = isRental ? 'Buat Invoice Sewa' : 'Buat Invoice Reguler';
@@ -756,6 +758,17 @@ window.addEventListener('DOMContentLoaded', async () => {
     
     const btnLogout = document.getElementById('btn-logout');
     if (btnLogout) btnLogout.addEventListener('click', window.handleLogout);
+
+    // Make brand logos clickable to redirect to Dashboard
+    document.querySelectorAll('.brand, .mobile-brand').forEach(el => {
+        // Exclude the login screen brand just in case
+        if (!el.classList.contains('login-brand')) {
+            el.addEventListener('click', () => { 
+                switchView('dashboard'); 
+                loadInvoices(1); 
+            });
+        }
+    });
 
     // Mobile Sidebar Setup
     const mobileBtn = document.getElementById('mobile-menu-btn');
