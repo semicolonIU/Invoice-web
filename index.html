@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice Generator Premium</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <!-- Appwrite Web SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/appwrite@16.0.0"></script>
+    <!-- jsPDF and AutoTable -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <!-- FontAwesome for PDF icon fonts (optional proxy) -->
+</head>
+<body>
+    <div id="view-login" class="login-wrapper">
+        <div class="login-container">
+            <div class="login-brand">
+                <div class="logo"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+                <h2>InvoicePro Admin</h2>
+            </div>
+            <p class="login-subtitle">Silakan autentikasi untuk melanjutkan</p>
+            <form id="login-form">
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="login-email" placeholder="admin@domain.com" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="login-password" placeholder="••••••••" required>
+                </div>
+                <div id="login-error" class="login-error" style="display: none;">Kredensial tidak valid.</div>
+                <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; margin-top: 10px;">Masuk <i class="fa-solid fa-arrow-right-to-bracket"></i></button>
+            </form>
+        </div>
+    </div>
+
+    <div class="app-container" style="display: none;">
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="logo">
+                    <i class="fa-solid fa-file-invoice-dollar"></i>
+                </div>
+                <h2>InvoicePro</h2>
+            </div>
+            <nav>
+                <a href="#" class="active" id="nav-dashboard"><i class="fa-solid fa-chart-pie"></i> Dashboard</a>
+                <a href="#" id="nav-create"><i class="fa-solid fa-plus"></i> Invoice Reguler</a>
+                <a href="#" id="nav-create-rental"><i class="fa-solid fa-truck-ramp-box"></i> Invoice Sewa</a>
+                <a href="#" id="nav-settings"><i class="fa-solid fa-gear"></i> Pengaturan</a>
+            </nav>
+            <div class="sidebar-footer">
+                <button id="btn-logout" class="btn btn-danger" style="width: 100%; justify-content: center; margin-bottom: 8px;"><i class="fa-solid fa-power-off"></i> Logout</button>
+                <p>Native V1.0</p>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <header>
+                <div class="user-info">
+                    <h1>Sistem Pengelola Invoice</h1>
+                    <p>Buat, Kelola, dan Bagikan Tagihan Profesional Anda secara real-time</p>
+                </div>
+            </header>
+
+            <div id="view-dashboard" class="view-section active">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fa-solid fa-calendar-check"></i></div>
+                        <div class="stat-info">
+                            <span class="stat-label">Bulan Ini</span>
+                            <h4 id="stat-month-total">Rp 0</h4>
+                            <p id="stat-month-count">0 Invoice</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon overall"><i class="fa-solid fa-wallet"></i></div>
+                        <div class="stat-info">
+                            <span class="stat-label">Keseluruhan</span>
+                            <h4 id="stat-all-total">Rp 0</h4>
+                            <p id="stat-all-count">0 Invoice</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="controls-bar">
+                    <div class="search-sort-group">
+                        <div class="search-box">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                            <input type="text" id="search-input" placeholder="Cari klien atau nomor..." oninput="filterInvoices()">
+                        </div>
+                        <select id="sort-select" onchange="sortInvoices()">
+                            <option value="createdAt">Urut: Teranyar dibuat</option>
+                            <option value="dateNewest">Urut: Tanggal Invoice (Baru)</option>
+                            <option value="dateOldest">Urut: Tanggal Invoice (Lama)</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" onclick="showCreate('normal')"><i class="fa-solid fa-plus"></i> Invoice Baru</button>
+                </div>
+                <div class="table-container">
+                    <table id="invoice-table">
+                        <thead>
+                            <tr>
+                                <th>No. Invoice</th>
+                                <th>Klien</th>
+                                <th>Keterangan Item</th>
+                                <th>Tanggal</th>
+                                <th>Total (Rp)</th>
+                                <th>Status</th>
+                                <th>Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="invoice-list">
+                            <tr><td colspan="7" class="text-center loading-text">Memuat data...</td></tr>
+                        </tbody>
+                        </table>
+                </div>
+                <div class="pagination-container" id="pagination-controls">
+                    <button class="btn btn-outline btn-sm" id="prev-btn" onclick="changePage(-1)"><i class="fa-solid fa-chevron-left"></i> Prev</button>
+                    <div class="page-numbers" id="page-numbers">
+                        <!-- JS injects page numbers -->
+                    </div>
+                    <button class="btn btn-outline btn-sm" id="next-btn" onclick="changePage(1)">Next <i class="fa-solid fa-chevron-right"></i></button>
+                    <span class="total-info" id="total-info">Total: 0</span>
+                </div>
+            </div>
+
+            <div id="view-create" class="view-section" style="display:none;">
+                <div class="controls-bar">
+                    <h3 id="form-title">Formulir Invoice Baru</h3>
+                    <button class="btn btn-secondary" onclick="showDashboard()"><i class="fa-solid fa-arrow-left"></i> Kembali</button>
+                </div>
+                <form id="invoice-form" class="form-container">
+                    <div class="form-group">
+                        <label>No. Invoice</label>
+                        <input type="text" id="inv-number" placeholder="INV-2023-001">
+                        <label class="visibility-toggle">
+                            <input type="checkbox" id="chk-show-inv" checked> Tampilkan di PDF
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Nama Klien</label>
+                            <input type="text" id="inv-client" list="client-names-list" placeholder="Nama Klien atau Perusahaan" required oninput="handleClientSelect(this)">
+                        </div>
+                        <div class="form-group">
+                            <label>Alamat Klien</label>
+                            <input type="text" id="inv-wa" placeholder="Jl. ... No. ..., Kota" required>
+                        </div>
+                    </div>
+                    <input type="hidden" id="inv-type" value="normal">
+                    
+                    <div class="form-row rental-only" style="display:none;">
+                        <div class="form-group">
+                            <label>Sewa Awal</label>
+                            <input type="date" id="sewa-awal">
+                        </div>
+                        <div class="form-group">
+                            <label>Sewa Akhir</label>
+                            <input type="date" id="sewa-akhir">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group normal-only">
+                            <label>No. PO</label>
+                            <input type="text" id="inv-po" list="po-list" placeholder="PO-KSA-JKT-2023-...">
+                            <label class="visibility-toggle">
+                                <input type="checkbox" id="chk-show-po" checked> Tampilkan di PDF
+                            </label>
+                        </div>
+                        <div class="form-group normal-only">
+                            <label>Site</label>
+                            <input type="text" id="inv-site" list="site-list" placeholder="Lokasi Proyek">
+                            <label class="visibility-toggle">
+                                <input type="checkbox" id="chk-show-site" checked> Tampilkan di PDF
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label>Tanggal Tagihan</label>
+                            <input type="date" id="inv-date">
+                        </div>
+                    </div>
+
+                    <div class="items-section">
+                        <h4>Rincian Item / Pekerjaan</h4>
+                        <div id="items-container">
+                            <!-- JS generate rows -->
+                        </div>
+                        <button type="button" class="btn btn-outline btn-add-item" onclick="addItemRow()"><i class="fa-solid fa-plus"></i> Tambah Item</button>
+                    </div>
+
+                    <div class="total-section">
+                        <h3>Total Akhir: Rp <span id="grand-total">0</span></h3>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" id="preview-btn" class="btn btn-outline" onclick="previewInvoice()"><i class="fa-solid fa-eye"></i> Pratinjau PDF</button>
+                        <button type="submit" id="submit-btn" class="btn btn-primary"><i class="fa-solid fa-save"></i> Simpan ke Appwrite</button>
+                    </div>
+                </form>
+            </div>
+            
+            <div id="view-settings" class="view-section" style="display:none;">
+                <div class="controls-bar">
+                    <h3>Kredensial Appwrite Database</h3>
+                </div>
+                <div class="warning-alert">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <div><b>Wajib!</b> Aplikasi ini tidak menyimpan backend sendiri. Anda harus memasukkan konfigurasi Appwrite Cloud Anda.</div>
+                </div>
+                <form id="settings-form" class="form-container">
+                    <div class="form-group">
+                        <label>Endpoint URL</label>
+                        <input type="text" id="setup-endpoint" placeholder="https://cloud.appwrite.io/v1" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Project ID</label>
+                        <input type="text" id="setup-project" placeholder="64bxxxxxxxxxx" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Database ID</label>
+                        <input type="text" id="setup-database" placeholder="64bxxxxxxxxxx" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Collection ID</label>
+                        <input type="text" id="setup-collection" placeholder="64bxxxxxxxxxx" required>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Hubungkan</button>
+                    </div>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <!-- Datalists for Autocomplete -->
+    <datalist id="saved-items-list"></datalist>
+    <datalist id="saved-tb-list"></datalist>
+    <datalist id="saved-bg-list"></datalist>
+    <datalist id="client-names-list"></datalist>
+    <datalist id="site-list"></datalist>
+    <datalist id="po-list"></datalist>
+
+    <!-- Preview Modal -->
+    <div id="preview-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Pratinjau Invoice</h3>
+                <button class="close-modal" onclick="closePreview()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <iframe id="preview-iframe" src=""></iframe>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closePreview()">Tutup</button>
+                <button class="btn btn-primary" onclick="downloadPreview()"><i class="fa-solid fa-download"></i> Download PDF</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="appwrite.js"></script>
+    <script src="pdf.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

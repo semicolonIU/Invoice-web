@@ -1,0 +1,12 @@
+{
+  "name": "invoice-web",
+  "version": "1.0.0",
+  "description": "Invoice Generator Premium",
+  "main": "index.html",
+  "scripts": {
+    "dev": "npx serve ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
