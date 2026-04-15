@@ -474,6 +474,7 @@ function getInvoiceFormData() {
         items:         JSON.stringify({
             type:     typeValue,
             rental:   { awal: sewaAwal, akhir: sewaAkhir },
+            notes:    document.getElementById('inv-notes').value.trim(),
             itemList: items,
             flags: {
                 showInv:  document.getElementById('chk-show-inv').checked,
@@ -521,6 +522,7 @@ function resetForm() {
     itemCount = 0;
     addItemRow();
     document.getElementById('grand-total').textContent = '0';
+    document.getElementById('inv-notes').value = '';
     
     // Auto Generate No. INV
     document.getElementById('inv-date').valueAsDate = new Date();
@@ -536,10 +538,12 @@ window.editInvoice = function(id) {
     // Determine type
     let invType = 'normal';
     let rentalData = { awal: '', akhir: '' };
+    let savedNotes = '';
     try {
         const obj = typeof invoice.items === 'string' ? JSON.parse(invoice.items) : invoice.items;
         invType = obj.type || 'normal';
         rentalData = obj.rental || rentalData;
+        savedNotes = obj.notes || '';
     } catch(e) {}
 
     showCreate(invType); // Switch view and reset form based on type
@@ -549,6 +553,7 @@ window.editInvoice = function(id) {
     document.getElementById('submit-btn').innerHTML = '<i class="fa-solid fa-save"></i> Perbarui Invoice';
 
     // Populate common data
+    document.getElementById('inv-notes').value = savedNotes;
     document.getElementById('inv-number').value = invoice.NoInvoice || '';
     document.getElementById('inv-client').value = (Array.isArray(invoice.clientName) ? invoice.clientName[0] : invoice.clientName) || '';
     document.getElementById('inv-wa').value     = invoice.clientAddress || '';

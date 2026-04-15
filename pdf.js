@@ -109,17 +109,17 @@ window.generatePDF = async function (invoiceData, action = 'download') {
     const badgeH = 14;
     const badgeX = pageW - marginR - badgeW;
     const badgeY = 6;
-    
+
     doc.setDrawColor(...ink);
     doc.setLineWidth(0.4);
     doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 2, 2, 'D'); // Outline only
     doc.setFillColor(...lightFill);
     doc.roundedRect(badgeX + 0.5, badgeY + 0.5, badgeW - 1, badgeH - 1, 2, 2, 'F'); // Very light fill
-    
+
     doc.setTextColor(...ink);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(15);
-    doc.text('INVOICE', badgeX + (badgeW/2), badgeY + 9.5, { align: 'center' });
+    doc.text('INVOICE', badgeX + (badgeW / 2), badgeY + 9.5, { align: 'center' });
 
     // ================================================
     // CLIENT & INVOICE INFO SECTION
@@ -162,7 +162,7 @@ window.generatePDF = async function (invoiceData, action = 'download') {
     let flags = { showInv: true, showPo: true, showSite: true, showDate: true };
     let invType = 'normal';
     let rental = { awal: '', akhir: '' };
-    
+
     try {
         const obj = typeof invoiceData.items === 'string' ? JSON.parse(invoiceData.items) : invoiceData.items;
         if (obj && obj.itemList) {
@@ -178,10 +178,10 @@ window.generatePDF = async function (invoiceData, action = 'download') {
     const isRental = invType === 'rental';
 
     // ── Right: Invoice meta box (Dynamic Rows with Checkbox Triggers) ──
-    const showPo   = !isRental && (flags.showPo !== false) && !!invoiceData.noPo && invoiceData.noPo.trim().toUpperCase() !== 'NO-ENTRY' && invoiceData.noPo.trim() !== '';
+    const showPo = !isRental && (flags.showPo !== false) && !!invoiceData.noPo && invoiceData.noPo.trim().toUpperCase() !== 'NO-ENTRY' && invoiceData.noPo.trim() !== '';
     const showSite = !isRental && (flags.showSite !== false) && !!invoiceData.site && invoiceData.site.trim() !== '';
     const showRental = isRental && rental.awal && rental.akhir;
-    
+
     const rowH = 12;
     let boxH = rowH; // Always has INV/DATE
     if (showPo) boxH += rowH;
@@ -209,7 +209,7 @@ window.generatePDF = async function (invoiceData, action = 'download') {
     let currentY = boxY;
 
     // --- ROW 1: INV & DATE ---
-    const invNum  = (flags.showInv !== false) ? (invoiceData.NoInvoice || '').toString() : '';
+    const invNum = (flags.showInv !== false) ? (invoiceData.NoInvoice || '').toString() : '';
     const invDate = (flags.showDate !== false && invoiceData.date) ? new Date(invoiceData.date).toLocaleDateString('id-ID') : '';
 
     doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(...midGray);
@@ -252,7 +252,7 @@ window.generatePDF = async function (invoiceData, action = 'download') {
         doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(...midGray);
         doc.text('PERIODE SEWA', boxX + 4, currentY + 4.5);
         doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...ink);
-        const awal  = new Date(rental.awal).toLocaleDateString('id-ID');
+        const awal = new Date(rental.awal).toLocaleDateString('id-ID');
         const akhir = new Date(rental.akhir).toLocaleDateString('id-ID');
         doc.text(`${awal} s/d ${akhir}`, boxX + 4, currentY + 9.5);
     }
@@ -342,6 +342,7 @@ window.generatePDF = async function (invoiceData, action = 'download') {
     doc.text('METODE PEMBAYARAN', marginL, payY);
 
     doc.setDrawColor(...lineGray);
+    doc.setLineWidth(0.2);
     doc.line(marginL, payY + 1.5, marginL + 70, payY + 1.5);
 
     doc.setFont('helvetica', 'normal');
@@ -353,6 +354,65 @@ window.generatePDF = async function (invoiceData, action = 'download') {
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...midGray);
     doc.text('a.n. Erwansyah', marginL, payY + 19);
+
+    // ================================================
+    // NOTES & SIGNATURES
+    // ================================================
+    let noteText = '';
+    let finalY = payY + 28; 
+
+    try {
+        const obj = typeof invoiceData.items === 'string' ? JSON.parse(invoiceData.items) : invoiceData.items;
+        noteText = obj.notes || '';
+    } catch (e) { }
+
+    // 1. NOTES
+    if (noteText && noteText.trim() !== '') {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(...midGray);
+        doc.text('CATATAN:', marginL, finalY);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
+        doc.setTextColor(...ink);
+        const splitNotes = doc.splitTextToSize(noteText, 180);
+        doc.text(splitNotes, marginL, finalY + 5);
+        
+        // Update finalY for next section
+        finalY += 5 + (splitNotes.length * 4.5) + 10; 
+    } else {
+        // If no notes, signatures start a bit higher or same as where they would be after some minimal gap
+        finalY = Math.max(finalY, payY + 28);
+    }
+
+    // 2. SIGNATURES (Rental Only)
+    if (isRental) {
+        // Ensure signatures don't overlap with payment info if notes are empty
+        if (!noteText || noteText.trim() === '') {
+            finalY = payY + 28; 
+        }
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(...darkText);
+        
+        const sigAreaW = 50;
+        const sigAreaH = 25;
+        
+        // Label positions
+        doc.text('Pengantar,', marginL + 5, finalY);
+        doc.text('Penerima,', pageW - marginR - sigAreaW + 5, finalY);
+        
+        // Blank space for signature (simulated with a very light underline or just space)
+        doc.setDrawColor(...lineGray);
+        doc.setLineWidth(0.2);
+        
+        // Underscore lines for names
+        const lineY = finalY + sigAreaH;
+        doc.line(marginL, lineY, marginL + sigAreaW, lineY);
+        doc.line(pageW - marginR - sigAreaW, lineY, pageW - marginR, lineY);
+    }
 
     // ================================================
     // FOOTER
