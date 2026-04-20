@@ -162,16 +162,35 @@ window.generatePDF = async function (invoiceData, action = 'download') {
     let flags = { showInv: true, showPo: true, showSite: true, showDate: true };
     let invType = 'normal';
     let rental = { awal: '', akhir: '' };
+    let tbArr = [];
+    let bgArr = [];
+    let descArr = [];
 
     try {
-        const obj = typeof invoiceData.items === 'string' ? JSON.parse(invoiceData.items) : invoiceData.items;
-        if (obj && obj.itemList) {
-            itemsArray = obj.itemList;
-            flags = obj.flags || flags;
-            invType = obj.type || 'normal';
-            rental = obj.rental || rental;
+        const itemObj = typeof invoiceData.items === 'string' ? JSON.parse(invoiceData.items) : invoiceData.items;
+        const noteObj = invoiceData.note ? (typeof invoiceData.note === 'string' ? JSON.parse(invoiceData.note) : invoiceData.note) : null;
+        // Kolom tb/bg terpisah (format paling baru)
+        const tbColRaw = invoiceData.tb ? (typeof invoiceData.tb === 'string' ? JSON.parse(invoiceData.tb) : invoiceData.tb) : null;
+        const bgColRaw = invoiceData.bg ? (typeof invoiceData.bg === 'string' ? JSON.parse(invoiceData.bg) : invoiceData.bg) : null;
+
+        if (noteObj) {
+            itemsArray = Array.isArray(itemObj) ? itemObj : [];
+            flags = noteObj.flags || flags;
+            invType = noteObj.type || 'normal';
+            rental = noteObj.rental || rental;
+            // Prioritas: kolom tb/bg terpisah > note.tb/bg (peralihan) > item.tb/bg (legacy)
+            tbArr = Array.isArray(tbColRaw) ? tbColRaw : (noteObj.tb || []);
+            bgArr = Array.isArray(bgColRaw) ? bgColRaw : (noteObj.bg || []);
+            descArr = noteObj.desc || [];
         } else {
-            itemsArray = Array.isArray(obj) ? obj : [];
+            if (itemObj && itemObj.itemList) {
+                itemsArray = itemObj.itemList;
+                flags = itemObj.flags || flags;
+                invType = itemObj.type || 'normal';
+                rental = itemObj.rental || rental;
+            } else {
+                itemsArray = Array.isArray(itemObj) ? itemObj : [];
+            }
         }
     } catch (e) { console.error('Gagal parse items', e); }
 
@@ -263,14 +282,20 @@ window.generatePDF = async function (invoiceData, action = 'download') {
     // Use the taller of the two sections (Client Info or Meta Box) to start table
     const tableY = secY + Math.max(boxH + 5, clientInfoH + 2);
 
-    const tableBody = itemsArray.map((item, i) => [
-        i + 1,
-        item.name,
-        item.qty,
-        'Rp ' + Number(item.price).toLocaleString('id-ID'),
-        isRental ? (item.desc || '-') : ((item.tb || "NO-ENTRY") + " / \n" + (item.bg || "NO-ENTRY")),
-        'Rp ' + (item.qty * item.price).toLocaleString('id-ID')
-    ]);
+    const tableBody = itemsArray.map((item, i) => {
+        const tbData = tbArr[i] !== undefined ? tbArr[i] : item.tb;
+        const bgData = bgArr[i] !== undefined ? bgArr[i] : item.bg;
+        const descData = descArr[i] !== undefined ? descArr[i] : item.desc;
+        
+        return [
+            i + 1,
+            item.name,
+            item.qty,
+            'Rp ' + Number(item.price).toLocaleString('id-ID'),
+            isRental ? (descData || '-') : ((tbData || "NO-ENTRY") + " / \n" + (bgData || "NO-ENTRY")),
+            'Rp ' + (item.qty * item.price).toLocaleString('id-ID')
+        ];
+    });
 
     const colName4 = isRental ? 'Keterangan' : 'TB/BG';
     const colAlign4 = isRental ? 'left' : 'center';
@@ -362,8 +387,14 @@ window.generatePDF = async function (invoiceData, action = 'download') {
     let finalY = payY + 28; 
 
     try {
-        const obj = typeof invoiceData.items === 'string' ? JSON.parse(invoiceData.items) : invoiceData.items;
-        noteText = obj.notes || '';
+        const itemObj = typeof invoiceData.items === 'string' ? JSON.parse(invoiceData.items) : invoiceData.items;
+        const noteObj = invoiceData.note ? (typeof invoiceData.note === 'string' ? JSON.parse(invoiceData.note) : invoiceData.note) : null;
+        
+        if (noteObj) {
+            noteText = noteObj.notes || '';
+        } else {
+            noteText = itemObj?.notes || '';
+        }
     } catch (e) { }
 
     // 1. NOTES

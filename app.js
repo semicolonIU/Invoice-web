@@ -290,13 +290,30 @@ function refreshMetadata(docs) {
     docs.forEach(inv => {
         try {
             let itemsData = typeof inv.items === 'string' ? JSON.parse(inv.items) : inv.items;
-            let itemsArray = itemsData?.itemList || (Array.isArray(itemsData) ? itemsData : []);
+            let noteData = inv.note ? (typeof inv.note === 'string' ? JSON.parse(inv.note) : inv.note) : null;
+            let itemsArray = [];
+
+            // Kolom tb dan bg terpisah (format baru)
+            const tbColRaw = inv.tb ? (typeof inv.tb === 'string' ? JSON.parse(inv.tb) : inv.tb) : null;
+            const bgColRaw = inv.bg ? (typeof inv.bg === 'string' ? JSON.parse(inv.bg) : inv.bg) : null;
             
-            itemsArray.forEach(i => {
-                if (i.name) freshItems[i.name] = i.price || 0;
-                if (i.tb && String(i.tb).toUpperCase() !== "NO-ENTRY") freshTb.add(String(i.tb));
-                if (i.bg && String(i.bg).toUpperCase() !== "NO-ENTRY") freshBg.add(String(i.bg));
-            });
+            if (noteData) {
+                itemsArray = Array.isArray(itemsData) ? itemsData : [];
+                itemsArray.forEach(i => {
+                    if (i.name) freshItems[i.name] = i.price || 0;
+                });
+                const tbSrc = Array.isArray(tbColRaw) ? tbColRaw : (noteData.tb || []);
+                const bgSrc = Array.isArray(bgColRaw) ? bgColRaw : (noteData.bg || []);
+                tbSrc.forEach(tb => { if (tb && String(tb).toUpperCase() !== "NO-ENTRY") freshTb.add(String(tb)); });
+                bgSrc.forEach(bg => { if (bg && String(bg).toUpperCase() !== "NO-ENTRY") freshBg.add(String(bg)); });
+            } else {
+                itemsArray = itemsData?.itemList || (Array.isArray(itemsData) ? itemsData : []);
+                itemsArray.forEach(i => {
+                    if (i.name) freshItems[i.name] = i.price || 0;
+                    if (i.tb && String(i.tb).toUpperCase() !== "NO-ENTRY") freshTb.add(String(i.tb));
+                    if (i.bg && String(i.bg).toUpperCase() !== "NO-ENTRY") freshBg.add(String(i.bg));
+                });
+            }
 
             const cName = Array.isArray(inv.clientName) ? inv.clientName[0] : inv.clientName;
             const cAddr = inv.clientAddress || inv.waNumber || '';
@@ -365,8 +382,10 @@ function renderInvoiceTable(docs) {
         let itemKeterangan = '-';
         try {
             const data = typeof invoice.items === 'string' ? JSON.parse(invoice.items) : invoice.items;
-            isRental = data.type === 'rental';
-            const arr = data.itemList || (Array.isArray(data) ? data : []);
+            const noteData = invoice.note ? (typeof invoice.note === 'string' ? JSON.parse(invoice.note) : invoice.note) : null;
+            
+            isRental = noteData ? (noteData.type === 'rental') : (data?.type === 'rental');
+            const arr = noteData ? (Array.isArray(data) ? data : []) : (data?.itemList || (Array.isArray(data) ? data : []));
             itemKeterangan = arr.map(i => i.name).join(', ') || '-';
             if (itemKeterangan.length > 50) itemKeterangan = itemKeterangan.substring(0, 50) + '...';
         } catch(e) {}
@@ -431,15 +450,18 @@ function updateStats(docs) {
 // Create Invoice Submit
 function getInvoiceFormData() {
     const items = [];
+    const tbArr = [];
+    const bgArr = [];
+    const descArr = [];
     document.querySelectorAll('.item-row').forEach(row => {
         items.push({
             name:  row.querySelector('.item-name').value,
             qty:   Number(row.querySelector('.item-qty').value),
-            price: Number(row.querySelector('.item-price').value),
-            tb:    row.querySelector('.item-tb').value.trim() || "NO-ENTRY",
-            bg:    row.querySelector('.item-bg').value.trim() || "NO-ENTRY",
-            desc:  row.querySelector('.item-desc') ? row.querySelector('.item-desc').value.trim() : ""
+            price: Number(row.querySelector('.item-price').value)
         });
+        tbArr.push(row.querySelector('.item-tb').value.trim() || "NO-ENTRY");
+        bgArr.push(row.querySelector('.item-bg').value.trim() || "NO-ENTRY");
+        descArr.push(row.querySelector('.item-desc') ? row.querySelector('.item-desc').value.trim() : "");
     });
 
     const clientNameValue = document.getElementById('inv-client').value;
@@ -471,11 +493,14 @@ function getInvoiceFormData() {
         date:          isoDate,
         issueDate:     isoDate,
         paymentStatus: "pending",
-        items:         JSON.stringify({
+        items:         JSON.stringify(items),
+        tb:            JSON.stringify(tbArr),
+        bg:            JSON.stringify(bgArr),
+        note:          JSON.stringify({
             type:     typeValue,
             rental:   { awal: sewaAwal, akhir: sewaAkhir },
             notes:    document.getElementById('inv-notes').value.trim(),
-            itemList: items,
+            desc:     descArr,
             flags: {
                 showInv:  document.getElementById('chk-show-inv').checked,
                 showPo:   document.getElementById('chk-show-po').checked,
@@ -539,11 +564,39 @@ window.editInvoice = function(id) {
     let invType = 'normal';
     let rentalData = { awal: '', akhir: '' };
     let savedNotes = '';
+    let itemsArray = [];
+    let flags = { showInv: true, showPo: true, showSite: true, showDate: true };
+    let tbArr = [];
+    let bgArr = [];
+    let descArr = [];
+
     try {
-        const obj = typeof invoice.items === 'string' ? JSON.parse(invoice.items) : invoice.items;
-        invType = obj.type || 'normal';
-        rentalData = obj.rental || rentalData;
-        savedNotes = obj.notes || '';
+        const itemObj = typeof invoice.items === 'string' ? JSON.parse(invoice.items) : invoice.items;
+        const noteObj = invoice.note ? (typeof invoice.note === 'string' ? JSON.parse(invoice.note) : invoice.note) : null;
+        const tbColRaw = invoice.tb ? (typeof invoice.tb === 'string' ? JSON.parse(invoice.tb) : invoice.tb) : null;
+        const bgColRaw = invoice.bg ? (typeof invoice.bg === 'string' ? JSON.parse(invoice.bg) : invoice.bg) : null;
+
+        if (noteObj) {
+            invType = noteObj.type || 'normal';
+            rentalData = noteObj.rental || rentalData;
+            savedNotes = noteObj.notes || '';
+            flags = noteObj.flags || flags;
+            // Prioritas: kolom tb/bg terpisah, fallback ke note.tb/bg (format peralihan)
+            tbArr = Array.isArray(tbColRaw) ? tbColRaw : (noteObj.tb || []);
+            bgArr = Array.isArray(bgColRaw) ? bgColRaw : (noteObj.bg || []);
+            descArr = noteObj.desc || [];
+            itemsArray = Array.isArray(itemObj) ? itemObj : [];
+        } else {
+            invType = itemObj?.type || 'normal';
+            rentalData = itemObj?.rental || rentalData;
+            savedNotes = itemObj?.notes || '';
+            flags = itemObj?.flags || flags;
+            if (itemObj && itemObj.itemList) {
+                itemsArray = itemObj.itemList;
+            } else {
+                itemsArray = Array.isArray(itemObj) ? itemObj : [];
+            }
+        }
     } catch(e) {}
 
     showCreate(invType); // Switch view and reset form based on type
@@ -569,19 +622,6 @@ window.editInvoice = function(id) {
     // Clear and restore items
     document.getElementById('items-container').innerHTML = '';
     itemCount = 0;
-    
-    let itemsArray = [];
-    let flags = { showInv: true, showPo: true, showSite: true, showDate: true };
-    
-    try {
-        const obj = typeof invoice.items === 'string' ? JSON.parse(invoice.items) : invoice.items;
-        if (obj && obj.itemList) {
-            itemsArray = obj.itemList;
-            flags = obj.flags || flags;
-        } else {
-            itemsArray = obj || [];
-        }
-    } catch(e) { console.error(e); }
 
     // Re-apply flags from saved data
     document.getElementById('chk-show-inv').checked  = (flags.showInv !== false);
@@ -589,16 +629,22 @@ window.editInvoice = function(id) {
     document.getElementById('chk-show-site').checked = (flags.showSite !== false);
 
     if (itemsArray.length > 0) {
-        itemsArray.forEach(item => {
+        itemsArray.forEach((item, idx) => {
             itemCount++;
             const row = createItemRow(itemCount);
             
             row.querySelector('.item-name').value  = item.name || '';
             row.querySelector('.item-qty').value   = item.qty || 1;
             row.querySelector('.item-price').value = item.price || 0;
-            row.querySelector('.item-tb').value    = (item.tb && item.tb !== "NO-ENTRY") ? item.tb : '';
-            row.querySelector('.item-bg').value    = (item.bg && item.bg !== "NO-ENTRY") ? item.bg : '';
-            if(row.querySelector('.item-desc')) row.querySelector('.item-desc').value = item.desc || '';
+
+            const tbVal = tbArr[idx] !== undefined ? tbArr[idx] : item.tb;
+            const bgVal = bgArr[idx] !== undefined ? bgArr[idx] : item.bg;
+            const descVal = descArr[idx] !== undefined ? descArr[idx] : item.desc;
+
+            row.querySelector('.item-tb').value    = (tbVal && tbVal !== "NO-ENTRY") ? tbVal : '';
+            row.querySelector('.item-bg').value    = (bgVal && bgVal !== "NO-ENTRY") ? bgVal : '';
+            if(row.querySelector('.item-desc')) row.querySelector('.item-desc').value = descVal || '';
+            
             document.getElementById('items-container').appendChild(row);
         });
     } else {
