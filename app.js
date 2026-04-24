@@ -15,13 +15,11 @@ let statsData = []; // Cache for stats and metadata
 
 const views = {
     dashboard: document.getElementById('view-dashboard'),
-    create: document.getElementById('view-create'),
-    settings: document.getElementById('view-settings')
+    create: document.getElementById('view-create')
 };
 const navs = {
     dashboard: document.getElementById('nav-dashboard'),
-    create: document.getElementById('nav-create'),
-    settings: document.getElementById('nav-settings')
+    create: document.getElementById('nav-create')
 };
 
 function closeMobileSidebar() {
@@ -42,7 +40,7 @@ function switchView(viewName) {
 document.getElementById('nav-dashboard').addEventListener('click', () => { switchView('dashboard'); loadInvoices(1); });
 document.getElementById('nav-create').addEventListener('click', () => { showCreate('normal'); });
 document.getElementById('nav-create-rental').addEventListener('click', () => { showCreate('rental'); });
-document.getElementById('nav-settings').addEventListener('click', () => { switchView('settings'); initSettings(); });
+
 
 function showDashboard() { switchView('dashboard'); loadInvoices(1); }
 
@@ -155,24 +153,7 @@ window.handleClientSelect = function(element) {
     }
 }
 
-// Inisialisasi Settings
-function initSettings() {
-    document.getElementById('setup-endpoint').value = localStorage.getItem('aw_endpoint') || 'https://sgp.cloud.appwrite.io/v1';
-    document.getElementById('setup-project').value = localStorage.getItem('aw_project') || '69d9eeb20034b5287618';
-    document.getElementById('setup-database').value = localStorage.getItem('aw_database') || '69d9f15c0001694b8ef4';
-    document.getElementById('setup-collection').value = localStorage.getItem('aw_collection') || 'invoice';
-}
 
-document.getElementById('settings-form').addEventListener('submit', (e) => {
-    e.preventDefault();
-    localStorage.setItem('aw_endpoint', document.getElementById('setup-endpoint').value);
-    localStorage.setItem('aw_project', document.getElementById('setup-project').value);
-    localStorage.setItem('aw_database', document.getElementById('setup-database').value);
-    localStorage.setItem('aw_collection', document.getElementById('setup-collection').value);
-    
-    alert('Pengaturan Tersimpan! Halaman akan dimuat ulang.');
-    window.location.reload();
-});
 
 // Load Invoices
 async function loadInvoices(page = 1) {
@@ -795,10 +776,7 @@ window.handleLogout = async function() {
 };
 
 function initAndLoad() {
-    initSettings();
-    if(localStorage.getItem('aw_database')) {
-        loadInvoices(1);
-    }
+    loadInvoices(1);
 }
 
 // Boot up
@@ -875,3 +853,157 @@ window.generateInvNumber = function(prefix) {
     const rand4 = Math.floor(Math.random() * 9000) + 1000;
     document.getElementById('inv-number').value = `${prefixStr}${yStr}${mStr}${rand4}`;
 };
+
+window.handlePdfScan = async function(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    const overlay = document.getElementById('scanning-overlay');
+    const mainText = document.getElementById('scan-main-text');
+    const subText = document.getElementById('scan-sub-text');
+    
+    overlay.style.display = 'flex';
+    mainText.textContent = 'Membaca File PDF...';
+    subText.textContent = 'Mengekstrak teks menggunakan unpdf';
+
+    const progressTimeouts = [
+        setTimeout(() => {
+            if(overlay.style.display !== 'none') {
+                mainText.textContent = 'Menghubungkan ke Gemini AI...';
+                subText.textContent = 'Mengirim data ke server Google';
+            }
+        }, 1500),
+        setTimeout(() => {
+            if(overlay.style.display !== 'none') {
+                mainText.textContent = 'Gemini sedang menganalisis...';
+                subText.textContent = 'Mengekstrak nama klien, alamat, dan tabel barang';
+            }
+        }, 3500),
+        setTimeout(() => {
+            if(overlay.style.display !== 'none') {
+                mainText.textContent = 'Memformat Data...';
+                subText.textContent = 'Mengonversi hasil ke struktur JSON (Structured Output)';
+            }
+        }, 6000)
+    ];
+
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        // Call the Next.js API (Running on port 3001)
+        const response = await fetch('http://localhost:3001/api/scan-pdf', {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+            if (result.retryAfter) {
+                // Server told us exactly how long to wait
+                showNextJsError(`Rate limit Gemini. Tunggu ${result.retryAfter} sebelum mencoba lagi.`);
+            } else {
+                throw new Error(result.error || 'Gagal menganalisis PDF');
+            }
+            return;
+        }
+
+        const data = result.data;
+
+        // Reset form and set type FIRST before populating fields
+        if (data.type) {
+            showCreate(data.type);
+            highlightField('form-title');
+        }
+
+        // Populate the form (NoInvoice is intentionally skipped so it keeps the website's original auto-generated number)
+        if (data.clientName) {
+            document.getElementById('inv-client').value = data.clientName;
+            highlightField('inv-client');
+        }
+        if (data.clientAddress) {
+            document.getElementById('inv-wa').value = data.clientAddress;
+            highlightField('inv-wa');
+        }
+        if (data.noPo) {
+            document.getElementById('inv-po').value = data.noPo;
+            highlightField('inv-po');
+        }
+        if (data.site) {
+            document.getElementById('inv-site').value = data.site;
+            highlightField('inv-site');
+        }
+        if (data.date) {
+            document.getElementById('inv-date').value = data.date.split('T')[0];
+            highlightField('inv-date');
+        }
+        if (data.notes) {
+            document.getElementById('inv-notes').value = data.notes;
+            highlightField('inv-notes');
+        }
+
+        // Handle items
+        if (data.items && Array.isArray(data.items)) {
+            document.getElementById('items-container').innerHTML = '';
+            itemCount = 0;
+            data.items.forEach(item => {
+                itemCount++;
+                const row = createItemRow(itemCount);
+                row.querySelector('.item-name').value = item.name || '';
+                row.querySelector('.item-qty').value = item.qty || 1;
+                row.querySelector('.item-price').value = item.price || 0;
+                if (item.tb) row.querySelector('.item-tb').value = item.tb;
+                if (item.bg) row.querySelector('.item-bg').value = item.bg;
+                if (item.desc) row.querySelector('.item-desc').value = item.desc;
+                document.getElementById('items-container').appendChild(row);
+                row.classList.add('scan-highlight');
+            });
+            calculateTotal();
+        }
+
+        alert('AI berhasil mengekstrak data! Silakan tinjau kembali sebelum menyimpan.');
+
+    } catch (error) {
+        console.error('Scan Error:', error);
+        
+        let errorMsg = error.message;
+        if (errorMsg.includes('Failed to fetch')) {
+            errorMsg = "Server Next.js (port 3001) tidak merespon. Pastikan server backend berjalan.";
+        } else if (errorMsg.includes('429') || errorMsg.includes('Too Many Requests')) {
+            errorMsg = "Gemini AI terlalu banyak permintaan. Tunggu 30 detik dan coba lagi.";
+        }
+        
+        showNextJsError(errorMsg);
+    } finally {
+        progressTimeouts.forEach(clearTimeout);
+        overlay.style.display = 'none';
+        input.value = ''; // Reset input
+    }
+};
+
+function highlightField(id) {
+    const el = document.getElementById(id);
+    if (el) {
+        el.classList.add('scan-highlight');
+        setTimeout(() => el.classList.remove('scan-highlight'), 3000);
+    }
+}
+
+// Global Error Handler for Next.js style toast
+function showNextJsError(message) {
+    const toast = document.getElementById('nextjs-error-toast');
+    const textEl = document.getElementById('nextjs-error-text');
+    if (toast && textEl) {
+        // We'll show "1 error" if it's generic, or prefix it with the specific message if brief
+        textEl.textContent = "1 error: " + (message.length > 40 ? message.substring(0, 40) + "..." : message);
+        toast.style.display = 'block';
+        
+        // Auto hide after 5 seconds to prevent permanent blocking
+        setTimeout(() => {
+            toast.style.display = 'none';
+        }, 5000);
+    } else {
+        alert(message);
+    }
+}
+

@@ -1,22 +1,16 @@
-// Inisialisasi Kredensial dari localStorage
-let APPWRITE_ENDPOINT = localStorage.getItem('aw_endpoint') || 'https://sgp.cloud.appwrite.io/v1';
-let APPWRITE_PROJECT = localStorage.getItem('aw_project') || '69d9eeb20034b5287618';
-let APPWRITE_DATABASE = localStorage.getItem('aw_database') || '69d9f15c0001694b8ef4';
-let APPWRITE_COLLECTION = localStorage.getItem('aw_collection') || 'invoice';
+// Inisialisasi Kredensial - Hardcoded for Security
+const APPWRITE_ENDPOINT = 'https://sgp.cloud.appwrite.io/v1';
+const APPWRITE_PROJECT = '69d9eeb20034b5287618';
+const APPWRITE_DATABASE = '69d9f15c0001694b8ef4';
+const APPWRITE_COLLECTION = 'invoice';
 
-const client = new Appwrite.Client();
+const client = new Appwrite.Client()
+    .setEndpoint(APPWRITE_ENDPOINT)
+    .setProject(APPWRITE_PROJECT);
+
 const databases = new Appwrite.Databases(client);
 const account = new Appwrite.Account(client);
 
-function initAppwrite() {
-    if(APPWRITE_ENDPOINT && APPWRITE_PROJECT) {
-        client
-            .setEndpoint(APPWRITE_ENDPOINT)
-            .setProject(APPWRITE_PROJECT);
-    }
-}
-
-initAppwrite();
 
 const API = {
     checkContext() {

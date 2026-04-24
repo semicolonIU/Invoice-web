@@ -62,7 +62,7 @@
                 <a href="#" class="active" id="nav-dashboard"><i class="fa-solid fa-chart-pie"></i> Dashboard</a>
                 <a href="#" id="nav-create"><i class="fa-solid fa-plus"></i> Invoice Reguler</a>
                 <a href="#" id="nav-create-rental"><i class="fa-solid fa-truck-ramp-box"></i> Invoice Sewa</a>
-                <a href="#" id="nav-settings"><i class="fa-solid fa-gear"></i> Pengaturan</a>
+
             </nav>
             <div class="sidebar-footer">
                 <button id="btn-logout" class="btn btn-danger" style="width: 100%; justify-content: center; margin-bottom: 8px;"><i class="fa-solid fa-power-off"></i> Logout</button>
@@ -143,7 +143,11 @@
             <div id="view-create" class="view-section" style="display:none;">
                 <div class="controls-bar">
                     <h3 id="form-title">Formulir Invoice Baru</h3>
-                    <button class="btn btn-secondary" onclick="showDashboard()"><i class="fa-solid fa-arrow-left"></i> Kembali</button>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="file" id="scan-pdf-input" accept=".pdf" style="display: none;" onchange="handlePdfScan(this)">
+                        <button class="btn btn-scan" onclick="document.getElementById('scan-pdf-input').click()"><i class="fa-solid fa-wand-magic-sparkles"></i> Scan PDF</button>
+                        <button class="btn btn-secondary" onclick="showDashboard()"><i class="fa-solid fa-arrow-left"></i> Kembali</button>
+                    </div>
                 </div>
                 <form id="invoice-form" class="form-container">
                     <div class="form-group">
@@ -219,38 +223,26 @@
                         <button type="submit" id="submit-btn" class="btn btn-primary"><i class="fa-solid fa-save"></i> Simpan ke Appwrite</button>
                     </div>
                 </form>
+                
+                <!-- Scanning Overlay -->
+                <div id="scanning-overlay" class="scanning-overlay" style="display: none;">
+                    <div class="ai-icon-pulse"><i class="fa-solid fa-microchip"></i></div>
+                    <div id="scan-main-text" class="scanning-text">Gemini AI is analyzing your PDF...</div>
+                    <div id="scan-sub-text" class="scanning-subtext">Mempersiapkan proses...</div>
+                </div>
             </div>
             
-            <div id="view-settings" class="view-section" style="display:none;">
-                <div class="controls-bar">
-                    <h3>Kredensial Appwrite Database</h3>
+            <!-- Next.js Style Error Toast -->
+            <div id="nextjs-error-toast" class="nextjs-error-toast" style="display: none;">
+                <div class="error-toast-content">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="error-icon"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                    <span id="nextjs-error-text">1 error</span>
+                    <button class="error-close-btn" onclick="document.getElementById('nextjs-error-toast').style.display='none'">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
                 </div>
-                <div class="warning-alert">
-                    <i class="fa-solid fa-triangle-exclamation"></i>
-                    <div><b>Wajib!</b> Aplikasi ini tidak menyimpan backend sendiri. Anda harus memasukkan konfigurasi Appwrite Cloud Anda.</div>
-                </div>
-                <form id="settings-form" class="form-container">
-                    <div class="form-group">
-                        <label>Endpoint URL</label>
-                        <input type="text" id="setup-endpoint" placeholder="https://cloud.appwrite.io/v1" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Project ID</label>
-                        <input type="text" id="setup-project" placeholder="64bxxxxxxxxxx" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Database ID</label>
-                        <input type="text" id="setup-database" placeholder="64bxxxxxxxxxx" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Collection ID</label>
-                        <input type="text" id="setup-collection" placeholder="64bxxxxxxxxxx" required>
-                    </div>
-                    <div class="form-actions">
-                        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Hubungkan</button>
-                    </div>
-                </form>
             </div>
+
         </main>
     </div>
 
