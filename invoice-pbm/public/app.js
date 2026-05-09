@@ -64,6 +64,24 @@ function showCreate(type = 'normal') {
     
     // Auto-prefix No. Invoice
     window.generateInvNumber(isRental ? 'SW' : 'INV');
+
+    // Auto-fill last notes for rental
+    if (isRental) {
+        let lastNotes = '';
+        const invoicesToSearch = statsData.length > 0 ? statsData : currentInvoices;
+        for (let inv of invoicesToSearch) {
+            try {
+                let noteData = inv.note ? (typeof inv.note === 'string' ? JSON.parse(inv.note) : inv.note) : null;
+                if (noteData && noteData.type === 'rental' && noteData.notes) {
+                    lastNotes = noteData.notes;
+                    break;
+                }
+            } catch(e) {}
+        }
+        if (lastNotes) {
+            document.getElementById('inv-notes').value = lastNotes;
+        }
+    }
 }
 
 // Formulir Interaktif Items
@@ -842,6 +860,40 @@ window.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('sewa-akhir').value = date.toISOString().split('T')[0];
         }
     });
+
+    const notesEl = document.getElementById('inv-notes');
+    if (notesEl) {
+        notesEl.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                const type = document.getElementById('inv-type').value;
+                if (type === 'rental') {
+                    const cursorPosition = this.selectionStart;
+                    const textBefore = this.value.substring(0, cursorPosition);
+                    const textAfter  = this.value.substring(cursorPosition);
+                    
+                    const lines = textBefore.split('\n');
+                    const currentLine = lines[lines.length - 1];
+                    
+                    const match = currentLine.match(/^(\d+)\.\s/);
+                    if (match) {
+                        e.preventDefault(); // Prevent standard enter
+                        if (currentLine.trim() === match[0].trim()) {
+                            // User pressed enter on an empty numbered line -> stop numbering
+                            lines[lines.length - 1] = '';
+                            this.value = lines.join('\n') + '\n' + textAfter;
+                            this.selectionStart = this.selectionEnd = cursorPosition - match[0].length + 1;
+                        } else {
+                            // Increment number
+                            const nextNumber = parseInt(match[1], 10) + 1;
+                            const insertText = '\n' + nextNumber + '. ';
+                            this.value = textBefore + insertText + textAfter;
+                            this.selectionStart = this.selectionEnd = cursorPosition + insertText.length;
+                        }
+                    }
+                }
+            }
+        });
+    }
 });
 
 window.generateInvNumber = function(prefix) {
@@ -891,8 +943,10 @@ window.handlePdfScan = async function(input) {
         const formData = new FormData();
         formData.append('file', file);
 
-        // Call the Next.js API (Running on port 3001)
-        const response = await fetch('http://localhost:3001/api/scan-pdf', {
+        // Frontend & backend digabung, gunakan path relatif
+        const apiUrl = '/api/scan-pdf';
+
+        const response = await fetch(apiUrl, {
             method: 'POST',
             body: formData
         });
@@ -968,7 +1022,7 @@ window.handlePdfScan = async function(input) {
         
         let errorMsg = error.message;
         if (errorMsg.includes('Failed to fetch')) {
-            errorMsg = "Server Next.js (port 3001) tidak merespon. Pastikan server backend berjalan.";
+            errorMsg = "Server tidak merespon. Pastikan server backend Next.js berjalan.";
         } else if (errorMsg.includes('429') || errorMsg.includes('Too Many Requests')) {
             errorMsg = "Gemini AI terlalu banyak permintaan. Tunggu 30 detik dan coba lagi.";
         }
@@ -994,16 +1048,16 @@ function showNextJsError(message) {
     const toast = document.getElementById('nextjs-error-toast');
     const textEl = document.getElementById('nextjs-error-text');
     if (toast && textEl) {
-        // We'll show "1 error" if it's generic, or prefix it with the specific message if brief
-        textEl.textContent = "1 error: " + (message.length > 40 ? message.substring(0, 40) + "..." : message);
+        // Show full detailed error message
+        textEl.textContent = "Error Detail: " + message;
         toast.style.display = 'block';
         
-        // Auto hide after 5 seconds to prevent permanent blocking
+        // Auto hide after 8 seconds to give time to read long errors
         setTimeout(() => {
             toast.style.display = 'none';
-        }, 5000);
+        }, 8000);
     } else {
-        alert(message);
+        alert("Error Detail: " + message);
     }
 }
 
