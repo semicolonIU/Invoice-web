@@ -222,10 +222,6 @@
                     <span class="info-label">Total Tagihan</span>
                     <span class="info-value highlight" id="val-total">Rp 0</span>
                 </div>
-                <div class="info-row">
-                    <span class="info-label">Status Pembayaran</span>
-                    <span id="val-payment-status" class="payment-pill pending">Pending</span>
-                </div>
             </div>
 
             <div id="verify-error-msg" style="display: none; text-align: center; color: #94a3b8; font-size: 14px; margin-top: 10px;">
@@ -293,11 +289,6 @@
                 });
 
                 document.getElementById('val-total').textContent = 'Rp ' + Number(doc.totalAmount || 0).toLocaleString('id-ID');
-
-                const pStatus = (doc.paymentStatus || 'pending').toLowerCase();
-                const pEl = document.getElementById('val-payment-status');
-                pEl.className = `payment-pill ${pStatus}`;
-                pEl.textContent = pStatus === 'paid' ? 'Lunas (Paid)' : (pStatus === 'overdue' ? 'Jatuh Tempo (Overdue)' : 'Menunggu (Pending)');
 
                 details.style.display = 'flex';
 

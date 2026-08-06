@@ -89,7 +89,7 @@
                         <i class="fa-solid fa-bell"></i>
                         <span class="notif-badge" id="notif-badge" style="display:none;">0</span>
                     </button>
-                    <div class="notif-panel" id="notif-panel" style="display:none;">
+                    <div class="notif-panel" id="notif-panel">
                         <div class="notif-panel-header">
                             <span><i class="fa-solid fa-bell"></i> Notifikasi</span>
                             <button class="notif-clear-btn" onclick="clearNotifications()" title="Tandai semua sudah dibaca"><i class="fa-solid fa-check-double"></i></button>
@@ -380,16 +380,11 @@
                 </div>
             </div>
             
-            <!-- Next.js Style Error Toast -->
-            <div id="nextjs-error-toast" class="nextjs-error-toast" style="display: none;">
-                <div class="error-toast-content">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="error-icon"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-                    <span id="nextjs-error-text">1 error</span>
-                    <button class="error-close-btn" onclick="document.getElementById('nextjs-error-toast').style.display='none'">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                    </button>
-                </div>
-            </div>
+            <!-- Toast Notification Container -->
+            <div id="toast-container"></div>
+
+            <!-- Confirm Dialog Modal -->
+            <div id="confirm-modal-root"></div>
 
         </main>
     </div>

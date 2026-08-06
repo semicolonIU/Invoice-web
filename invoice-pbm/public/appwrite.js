@@ -120,6 +120,17 @@ const API = {
         }
     },
 
+    async getInvoice(id) {
+        this.checkContext();
+        try {
+            const response = await databases.getDocument(APPWRITE_DATABASE, APPWRITE_COLLECTION, id);
+            return response;
+        } catch (error) {
+            console.error("Error fetching invoice:", error);
+            return null;
+        }
+    },
+
     async deleteInvoice(id) {
         this.checkContext();
         try {

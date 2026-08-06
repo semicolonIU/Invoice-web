@@ -212,6 +212,139 @@ window.handleClientSelect = function(element) {
 
 
 // ══════════════════════════════════════════════════════
+//  TOAST NOTIFICATION SYSTEM – Universal Feedback
+// ══════════════════════════════════════════════════════
+
+const TOAST_ICONS = {
+    success: 'fa-circle-check',
+    error:   'fa-circle-xmark',
+    warning: 'fa-triangle-exclamation',
+    info:    'fa-circle-info'
+};
+const TOAST_TITLES = {
+    success: 'Berhasil',
+    error:   'Gagal',
+    warning: 'Peringatan',
+    info:    'Informasi'
+};
+const TOAST_DURATIONS = {
+    success: 4000,
+    error:   6000,
+    warning: 5000,
+    info:    4000
+};
+
+/**
+ * Tampilkan toast notification modern.
+ * @param {string} message - Pesan yang ditampilkan
+ * @param {'success'|'error'|'warning'|'info'} type - Tipe toast
+ * @param {number} [duration] - Durasi ms (opsional, default sesuai tipe)
+ */
+function showToast(message, type = 'info', duration) {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const ms = duration || TOAST_DURATIONS[type] || 4000;
+    const toast = document.createElement('div');
+    toast.className = `toast-item toast-${type}`;
+    toast.innerHTML = `
+        <div class="toast-icon"><i class="fa-solid ${TOAST_ICONS[type]}"></i></div>
+        <div class="toast-body">
+            <div class="toast-title">${TOAST_TITLES[type]}</div>
+            <div class="toast-message">${message}</div>
+        </div>
+        <button class="toast-close-btn" title="Tutup"><i class="fa-solid fa-xmark"></i></button>
+        <div class="toast-progress" style="animation-duration: ${ms}ms;"></div>
+    `;
+
+    // Close button
+    toast.querySelector('.toast-close-btn').onclick = () => dismissToast(toast);
+
+    container.appendChild(toast);
+
+    // Auto dismiss
+    const timer = setTimeout(() => dismissToast(toast), ms);
+    toast._timer = timer;
+
+    // Pause progress on hover
+    toast.addEventListener('mouseenter', () => {
+        clearTimeout(toast._timer);
+        const prog = toast.querySelector('.toast-progress');
+        if (prog) prog.style.animationPlayState = 'paused';
+    });
+    toast.addEventListener('mouseleave', () => {
+        const prog = toast.querySelector('.toast-progress');
+        if (prog) prog.style.animationPlayState = 'running';
+        toast._timer = setTimeout(() => dismissToast(toast), 2000);
+    });
+
+    // Limit max visible toasts
+    const all = container.querySelectorAll('.toast-item:not(.toast-exit)');
+    if (all.length > 5) dismissToast(all[0]);
+}
+
+function dismissToast(el) {
+    if (!el || el.classList.contains('toast-exit')) return;
+    clearTimeout(el._timer);
+    el.classList.add('toast-exit');
+    el.addEventListener('animationend', () => el.remove(), { once: true });
+}
+
+/**
+ * Tampilkan dialog konfirmasi kustom (pengganti confirm()).
+ * @param {string} title - Judul dialog
+ * @param {string} message - Pesan dialog
+ * @param {Object} [opts] - Opsi: confirmText, cancelText, type ('danger'|'warning'), icon
+ * @returns {Promise<boolean>} - true jika user mengkonfirmasi
+ */
+function showConfirm(title, message, opts = {}) {
+    return new Promise(resolve => {
+        const type = opts.type || 'danger';
+        const icon = opts.icon || (type === 'danger' ? 'fa-trash-can' : 'fa-right-from-bracket');
+        const confirmText = opts.confirmText || (type === 'danger' ? 'Hapus' : 'Lanjutkan');
+        const cancelText = opts.cancelText || 'Batal';
+
+        const overlay = document.createElement('div');
+        overlay.className = 'confirm-overlay';
+        overlay.innerHTML = `
+            <div class="confirm-card">
+                <div class="confirm-icon ${type}"><i class="fa-solid ${icon}"></i></div>
+                <div class="confirm-title">${title}</div>
+                <div class="confirm-message">${message}</div>
+                <div class="confirm-actions">
+                    <button class="confirm-btn-cancel">${cancelText}</button>
+                    <button class="confirm-btn-confirm ${type}">${confirmText}</button>
+                </div>
+            </div>
+        `;
+
+        const close = (result) => {
+            overlay.classList.add('confirm-exit');
+            overlay.addEventListener('animationend', () => {
+                overlay.remove();
+                resolve(result);
+            }, { once: true });
+        };
+
+        overlay.querySelector('.confirm-btn-cancel').onclick = () => close(false);
+        overlay.querySelector('.confirm-btn-confirm').onclick = () => close(true);
+        // Click backdrop to cancel
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) close(false);
+        });
+        // Escape key to cancel
+        const escHandler = (e) => {
+            if (e.key === 'Escape') { close(false); document.removeEventListener('keydown', escHandler); }
+        };
+        document.addEventListener('keydown', escHandler);
+
+        const root = document.getElementById('confirm-modal-root');
+        if (root) root.appendChild(overlay);
+        else document.body.appendChild(overlay);
+    });
+}
+
+// ══════════════════════════════════════════════════════
 //  NOTIFICATION SYSTEM – Pengingat Invoice Sewa
 // ══════════════════════════════════════════════════════
 
@@ -344,9 +477,13 @@ function renderNotifications() {
 window.toggleNotifPanel = function(forceState) {
     const panel = document.getElementById('notif-panel');
     if (!panel) return;
-    const isOpen = panel.style.display !== 'none';
+    const isOpen = panel.classList.contains('open');
     const shouldOpen = forceState !== undefined ? forceState : !isOpen;
-    panel.style.display = shouldOpen ? 'block' : 'none';
+    if (shouldOpen) {
+        panel.classList.add('open');
+    } else {
+        panel.classList.remove('open');
+    }
 };
 
 window.dismissNotification = function(id) {
@@ -374,7 +511,7 @@ document.addEventListener('click', function(e) {
     const wrapper = document.getElementById('notif-wrapper');
     if (wrapper && !wrapper.contains(e.target)) {
         const panel = document.getElementById('notif-panel');
-        if (panel) panel.style.display = 'none';
+        if (panel) panel.classList.remove('open');
     }
 });
 
@@ -847,8 +984,8 @@ document.getElementById('invoice-form').addEventListener('submit', async (e) => 
                 
                 // --- PENTING: GANTI URL DI BAWAH INI DENGAN WEBHOOK MAKE.COM ANDA ---
                 const MAKE_WEBHOOK_URL = 'https://hook.eu1.make.com/7hi6l7tvede93y853hslvlax68omzcjk';
-                const updateUrl = `${window.location.origin}/?edit=${invoiceData.$id}`;
-                const newRentalUrl = `${window.location.origin}/?new=rental`;
+                const invoiceDocId = invoiceData.$id || '';
+                const newRentalUrl = `${window.location.origin}/?rental_from=${invoiceDocId}`;
                 
                 // Hanya kirim jika URL sudah diisi oleh pengguna
                 if (!MAKE_WEBHOOK_URL.includes('xxxxxxxx')) {
@@ -862,7 +999,7 @@ document.getElementById('invoice-form').addEventListener('submit', async (e) => 
                             awal: noteObj.rental.awal,
                             akhir: noteObj.rental.akhir,
                             title: `PENGINGAT: Berakhirnya Sewa PBM - ${cName}`,
-                            description: `Detail Penyewaan:\n- Nama Klien: ${cName}\n- No. Invoice: ${invoiceData.NoInvoice}\n- Periode: ${noteObj.rental.awal} s/d ${noteObj.rental.akhir}\n\nPengingat:\nMasa sewa untuk invoice ini akan segera berakhir. Harap hubungi klien untuk konfirmasi perpanjangan atau pengembalian barang.\n\n🔗 Perbarui Invoice Ini:\n${updateUrl}\n\n🆕 Buat Invoice Sewa Bulan Baru:\n${newRentalUrl}`
+                            description: `Detail Penyewaan:\n- Nama Klien: ${cName}\n- No. Invoice: ${invoiceData.NoInvoice}\n- Periode: ${noteObj.rental.awal} s/d ${noteObj.rental.akhir}\n\nPengingat:\nMasa sewa untuk invoice ini akan segera berakhir. Harap hubungi klien untuk konfirmasi perpanjangan atau pengembalian barang.\n\n🆕 Buat Invoice Sewa Bulan Baru (klik link ini):\n${newRentalUrl}`
                         })
                     }).catch(err => console.error('Gagal memanggil webhook:', err));
                 }
@@ -871,13 +1008,13 @@ document.getElementById('invoice-form').addEventListener('submit', async (e) => 
             console.error("Gagal memproses Webhook", e);
         }
 
-        alert(editingId ? 'Sukses: Invoice berhasil diperbarui!' : 'Sukses: Invoice berhasil direkam!');
+        showToast(editingId ? 'Invoice berhasil diperbarui!' : 'Invoice berhasil direkam!', 'success');
 
         editingId = null;
         statsData = []; // Reset stats cache to force reload
         showDashboard();
     } catch (e) {
-        alert('Error menyimpan ke Appwrite: ' + e.message);
+        showToast('Gagal menyimpan ke Appwrite: ' + e.message, 'error');
     } finally {
         const resetText = editingId ? 'Perbarui Invoice' : 'Simpan ke Appwrite';
         btn.innerHTML = `<i class="fa-solid fa-save"></i> ${resetText}`;
@@ -1096,13 +1233,15 @@ window.createRentalForThisMonth = function(id) {
 }
 
 window.deleteInvoice = async function(id) {
-    if(confirm('Data invoice ini akan dihapus secara permanen. Lanjutkan?')) {
+    const confirmed = await showConfirm('Hapus Invoice', 'Data invoice ini akan dihapus secara permanen. Tindakan ini tidak dapat dibatalkan.', { type: 'danger', confirmText: 'Ya, Hapus', icon: 'fa-trash-can' });
+    if(confirmed) {
         try {
             await API.deleteInvoice(id);
+            showToast('Invoice berhasil dihapus', 'success');
             statsData = [];
             loadInvoices(currentPage);
         } catch(e) {
-            alert('Gagal menghapus: ' + e.message);
+            showToast('Gagal menghapus: ' + e.message, 'error');
         }
     }
 }
@@ -1110,9 +1249,9 @@ window.deleteInvoice = async function(id) {
 window.updatePaymentStatus = async function(id, newStatus) {
     try {
         await API.updateInvoiceStatus(id, newStatus);
-        // Optionally show a toast or alert, or just let it be silent
+        showToast('Status pembayaran diperbarui', 'success');
     } catch (e) {
-        alert('Gagal mengupdate status: ' + e.message);
+        showToast('Gagal mengupdate status: ' + e.message, 'error');
         loadInvoices(); // reload to reset the select to previous state
     }
 }
@@ -1129,10 +1268,10 @@ window.downloadPDF = async function(id) {
             }
         } catch (e) {
             console.error("Download PDF Error:", e);
-            alert("Gagal mengunduh PDF: " + e.message);
+            showToast('Gagal mengunduh PDF: ' + e.message, 'error');
         }
     } else {
-        alert("Data invoice tidak ditemukan.");
+        showToast('Data invoice tidak ditemukan.', 'warning');
     }
 }
 
@@ -1157,12 +1296,12 @@ window.nativeShare = async function(id) {
                 updatePaymentStatus(id, 'paid');
             }
         } else {
-            alert('Browser/Ponsel Anda tidak memiliki dukungan membagikan file PDF secara langsung. Membuka opsi Download...');
+            showToast('Browser/Ponsel Anda tidak mendukung share file PDF. Mengunduh file...', 'warning');
             await window.generatePDF(invoice, 'download');
         }
     } catch (e) {
         if (e.name !== 'AbortError') {
-            alert('Gagal membagikan dokumen: ' + e.message);
+            showToast('Gagal membagikan dokumen: ' + e.message, 'error');
         }
     }
 }
@@ -1199,7 +1338,7 @@ window.previewInvoice = async function() {
             document.getElementById('preview-modal').style.display = 'flex';
         }
     } catch (e) {
-        alert('Gagal membuat pratinjau: ' + e.message);
+        showToast('Gagal membuat pratinjau: ' + e.message, 'error');
     } finally {
         btn.innerHTML = originalText;
         btn.disabled = false;
@@ -1255,12 +1394,13 @@ window.handleLogin = async function(e) {
 };
 
 window.handleLogout = async function() {
-    if (confirm('Anda yakin ingin keluar?')) {
+    const confirmed = await showConfirm('Keluar', 'Anda yakin ingin keluar dari akun ini?', { type: 'warning', confirmText: 'Ya, Keluar', icon: 'fa-right-from-bracket' });
+    if (confirmed) {
         try {
             await API.logout();
             window.location.reload();
         } catch (e) {
-            alert('Gagal logout: ' + e.message);
+            showToast('Gagal logout: ' + e.message, 'error');
         }
     }
 };
@@ -1274,14 +1414,32 @@ async function initAndLoad() {
 
     // Deep-link handling dari Google Calendar (Make.com webhook)
     const urlParams = new URLSearchParams(window.location.search);
-    const newType = urlParams.get('new');
+    const rentalFromId = urlParams.get('rental_from');
 
-    if (newType === 'rental') {
+    if (rentalFromId) {
         // Bersihkan URL agar bersih
         history.replaceState({}, '', window.location.pathname);
-        // Load data terlebih dahulu, lalu langsung buka form sewa baru
+        // Load semua data terlebih dahulu (termasuk statsData), lalu buka form sewa dengan data invoice sumber
         await loadInvoices(1);
-        showCreate('rental');
+        // Cari invoice di currentInvoices atau statsData
+        const srcInvoice = currentInvoices.find(v => v.$id === rentalFromId)
+                        || statsData.find(v => v.$id === rentalFromId);
+        if (srcInvoice) {
+            window.createRentalForThisMonth(srcInvoice.$id);
+        } else {
+            // Jika tidak ditemukan di cache, fetch langsung dari API
+            try {
+                const fetched = await API.getInvoice(rentalFromId);
+                if (fetched) {
+                    currentInvoices = [fetched, ...currentInvoices];
+                    window.createRentalForThisMonth(fetched.$id);
+                } else {
+                    showCreate('rental');
+                }
+            } catch(e) {
+                showCreate('rental');
+            }
+        }
     } else {
         loadInvoices(1);
     }
@@ -1507,7 +1665,7 @@ window.handlePdfScan = async function(input) {
             calculateTotal();
         }
 
-        alert('AI berhasil mengekstrak data! Silakan tinjau kembali sebelum menyimpan.');
+        showToast('AI berhasil mengekstrak data! Silakan tinjau kembali sebelum menyimpan.', 'success');
 
     } catch (error) {
         console.error('Scan Error:', error);
@@ -1519,7 +1677,7 @@ window.handlePdfScan = async function(input) {
             errorMsg = "Gemini AI terlalu banyak permintaan. Tunggu 30 detik dan coba lagi.";
         }
         
-        showNextJsError(errorMsg);
+        showToast(errorMsg, 'error', 8000);
     } finally {
         progressTimeouts.forEach(clearTimeout);
         overlay.style.display = 'none';
@@ -1535,23 +1693,7 @@ function highlightField(id) {
     }
 }
 
-// Global Error Handler for Next.js style toast
-function showNextJsError(message) {
-    const toast = document.getElementById('nextjs-error-toast');
-    const textEl = document.getElementById('nextjs-error-text');
-    if (toast && textEl) {
-        // Show full detailed error message
-        textEl.textContent = "Error Detail: " + message;
-        toast.style.display = 'block';
-        
-        // Auto hide after 8 seconds to give time to read long errors
-        setTimeout(() => {
-            if (toast) toast.style.display = 'none';
-        }, 8000);
-    } else {
-        alert("Error Detail: " + message);
-    }
-}
+// showNextJsError telah digantikan oleh showToast(message, 'error', duration)
 
 /* ==========================================================================
    Business Health Analytics Engine
