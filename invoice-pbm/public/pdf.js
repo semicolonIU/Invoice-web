@@ -16,6 +16,18 @@ function loadImageAsBase64(url) {
     });
 }
 
+// Helper: generate QR Code Data URL
+async function generateQRCodeDataURL(text) {
+    if (typeof QRCode !== 'undefined' && QRCode.toDataURL) {
+        try {
+            return await QRCode.toDataURL(text, { width: 150, margin: 1 });
+        } catch (e) {
+            console.error("Gagal membuat QR Code:", e);
+        }
+    }
+    return null;
+}
+
 window.generatePDF = async function (invoiceData, action = 'download') {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({
@@ -356,18 +368,49 @@ window.generatePDF = async function (invoiceData, action = 'download') {
             doc.setFontSize(12);
             doc.text('Rp ' + Number(invoiceData.totalAmount).toLocaleString('id-ID'), totalBoxX + 75, finalY + 10, { align: 'right' });
 
-            // PAYMENT INFO
+            // PAYMENT INFO & VERIFICATION QR CODE
             const payY = finalY + 4;
             doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...midGray);
             doc.text('METODE PEMBAYARAN', marginL, payY);
             doc.setDrawColor(...lineGray); doc.setLineWidth(0.2);
-            doc.line(marginL, payY + 1.5, marginL + 70, payY + 1.5);
+            doc.line(marginL, payY + 1.5, marginL + 60, payY + 1.5);
             doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...ink);
             doc.text('Bank MANDIRI', marginL, payY + 7);
             doc.setFont('helvetica', 'bold');
             doc.text('9000018394503', marginL, payY + 13);
             doc.setFont('helvetica', 'normal'); doc.setTextColor(...midGray);
             doc.text('a.n. Erwansyah', marginL, payY + 19);
+
+            // Generate & Render QR Code Verifikasi Keaslian
+            const verifyTargetId = invoiceData.$id || invoiceData.id || '';
+            const verifyBaseUrl = window.location.origin.includes('localhost')
+                ? 'https://invoice-pbm.vercel.app'
+                : window.location.origin;
+            const verifyUrl = `${verifyBaseUrl}/verify.html?id=${verifyTargetId}`;
+
+            try {
+                const qrDataUrl = await generateQRCodeDataURL(verifyUrl);
+                if (qrDataUrl) {
+                    const qrX = marginL + 66;
+                    const qrY = payY - 2;
+                    const qrSize = 21; // 21mm x 21mm
+
+                    // Frame halus di sekeliling QR Code
+                    doc.setFillColor(255, 255, 255);
+                    doc.setDrawColor(...lineGray);
+                    doc.setLineWidth(0.2);
+                    doc.roundedRect(qrX, qrY, qrSize, qrSize + 5, 1.5, 1.5, 'FD');
+
+                    doc.addImage(qrDataUrl, 'PNG', qrX + 1, qrY + 1, qrSize - 2, qrSize - 2);
+
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(5.5);
+                    doc.setTextColor(...midGray);
+                    doc.text('VERIFIKASI ASLI', qrX + (qrSize / 2), qrY + qrSize + 3, { align: 'center' });
+                }
+            } catch (qrErr) {
+                console.error("QR Code PDF insert error:", qrErr);
+            }
 
             finalY = payY + 28;
         } else {

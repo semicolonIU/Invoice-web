@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verifikasi Keaslian Invoice — CV. Putra Banua Mandiri</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <!-- Appwrite Web SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/appwrite@16.0.0"></script>
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            margin: 0;
+        }
+
+        .verify-card-container {
+            width: 100%;
+            max-width: 520px;
+            background: #1e293b;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .verify-header {
+            padding: 30px 24px 20px;
+            text-align: center;
+            background: linear-gradient(180deg, rgba(30, 41, 59, 0.8) 0%, #1e293b 100%);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .verify-brand-logo {
+            width: 64px;
+            height: 64px;
+            background: linear-gradient(135deg, #6366f1, #a855f7);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+            color: #ffffff;
+            margin: 0 auto 16px;
+            box-shadow: 0 8px 20px rgba(99, 102, 241, 0.35);
+        }
+
+        .verify-title {
+            font-size: 14px;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+            margin: 0 0 6px;
+        }
+
+        .company-name {
+            font-size: 20px;
+            font-weight: 800;
+            color: #ffffff;
+            margin: 0;
+        }
+
+        .verify-body {
+            padding: 28px 24px;
+        }
+
+        .status-banner {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 14px;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 14px;
+            letter-spacing: 0.5px;
+            margin-bottom: 24px;
+            text-transform: uppercase;
+        }
+
+        .status-banner.valid {
+            background: rgba(16, 185, 129, 0.15);
+            border: 1px solid rgba(16, 185, 129, 0.4);
+            color: #34d399;
+        }
+
+        .status-banner.invalid {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            color: #f87171;
+        }
+
+        .status-banner.loading {
+            background: rgba(99, 102, 241, 0.15);
+            border: 1px solid rgba(99, 102, 241, 0.4);
+            color: #818cf8;
+        }
+
+        .info-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 14px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .info-label {
+            font-size: 13px;
+            color: #94a3b8;
+            font-weight: 500;
+        }
+
+        .info-value {
+            font-size: 14px;
+            font-weight: 700;
+            color: #f8fafc;
+            text-align: right;
+        }
+
+        .info-value.highlight {
+            color: #818cf8;
+            font-size: 16px;
+        }
+
+        .payment-pill {
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .payment-pill.paid { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+        .payment-pill.pending { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+        .payment-pill.overdue { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+
+        .verify-footer {
+            padding: 20px 24px;
+            text-align: center;
+            background: rgba(15, 23, 42, 0.5);
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 12px;
+            color: #64748b;
+        }
+
+        .verify-footer i {
+            color: #34d399;
+            margin-right: 4px;
+        }
+
+        .btn-back-home {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 16px;
+            color: #818cf8;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 600;
+            transition: color 0.2s;
+        }
+
+        .btn-back-home:hover {
+            color: #a5b4fc;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="verify-card-container">
+        <div class="verify-header">
+            <div class="verify-brand-logo">
+                <i class="fa-solid fa-file-invoice-dollar"></i>
+            </div>
+            <div class="verify-title">Sertifikat Verifikasi Keaslian</div>
+            <h1 class="company-name">CV. PUTRA BANUA MANDIRI</h1>
+        </div>
+
+        <div class="verify-body">
+            <div id="verify-status-banner" class="status-banner loading">
+                <i class="fa-solid fa-spinner fa-spin"></i> Memeriksa Keaslian Dokumen...
+            </div>
+
+            <div id="verify-details" class="info-grid" style="display: none;">
+                <div class="info-row">
+                    <span class="info-label">Nomor Invoice</span>
+                    <span class="info-value highlight" id="val-no-inv">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Tipe Dokumen</span>
+                    <span class="info-value" id="val-type">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Nama Klien / Perusahaan</span>
+                    <span class="info-value" id="val-client">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Tanggal Terbit</span>
+                    <span class="info-value" id="val-date">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Total Tagihan</span>
+                    <span class="info-value highlight" id="val-total">Rp 0</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Status Pembayaran</span>
+                    <span id="val-payment-status" class="payment-pill pending">Pending</span>
+                </div>
+            </div>
+
+            <div id="verify-error-msg" style="display: none; text-align: center; color: #94a3b8; font-size: 14px; margin-top: 10px;">
+                Dokumen ini tidak dapat diverifikasi atau ID invoice tidak terdaftar pada database resmi CV. Putra Banua Mandiri.
+            </div>
+        </div>
+
+        <div class="verify-footer">
+            <i class="fa-solid fa-shield-halved"></i> Terverifikasi secara digital via Appwrite Cloud Security System
+        </div>
+    </div>
+
+    <a href="/" class="btn-back-home">
+        <i class="fa-solid fa-arrow-left"></i> Kembali ke Beranda
+    </a>
+
+    <script>
+        const APPWRITE_ENDPOINT = 'https://sgp.cloud.appwrite.io/v1';
+        const APPWRITE_PROJECT = '69d9eeb20034b5287618';
+        const APPWRITE_DATABASE = '69d9f15c0001694b8ef4';
+        const APPWRITE_COLLECTION = 'invoice';
+
+        const client = new Appwrite.Client()
+            .setEndpoint(APPWRITE_ENDPOINT)
+            .setProject(APPWRITE_PROJECT);
+
+        const databases = new Appwrite.Databases(client);
+
+        async function verifyInvoice() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const invoiceId = urlParams.get('id') || urlParams.get('verify');
+
+            const banner = document.getElementById('verify-status-banner');
+            const details = document.getElementById('verify-details');
+            const errorMsg = document.getElementById('verify-error-msg');
+
+            if (!invoiceId) {
+                banner.className = 'status-banner invalid';
+                banner.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> ID INVOICE TIDAK DITEMUKAN';
+                errorMsg.style.display = 'block';
+                return;
+            }
+
+            try {
+                const doc = await databases.getDocument(APPWRITE_DATABASE, APPWRITE_COLLECTION, invoiceId);
+
+                // Invoice Valid
+                banner.className = 'status-banner valid';
+                banner.innerHTML = '<i class="fa-solid fa-circle-check"></i> DOKUMEN RESMI & TERVERIFIKASI ASLI';
+
+                // Fill Details
+                document.getElementById('val-no-inv').textContent = doc.NoInvoice || '-';
+                
+                const isRental = String(doc.NoInvoice || '').toUpperCase().startsWith('SW');
+                document.getElementById('val-type').textContent = isRental ? 'Invoice Sewa' : 'Invoice Reguler';
+
+                const cName = Array.isArray(doc.clientName) ? doc.clientName[0] : doc.clientName;
+                document.getElementById('val-client').textContent = cName || '-';
+
+                const invDate = doc.date ? new Date(doc.date) : new Date(doc.$createdAt);
+                document.getElementById('val-date').textContent = invDate.toLocaleDateString('id-ID', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric'
+                });
+
+                document.getElementById('val-total').textContent = 'Rp ' + Number(doc.totalAmount || 0).toLocaleString('id-ID');
+
+                const pStatus = (doc.paymentStatus || 'pending').toLowerCase();
+                const pEl = document.getElementById('val-payment-status');
+                pEl.className = `payment-pill ${pStatus}`;
+                pEl.textContent = pStatus === 'paid' ? 'Lunas (Paid)' : (pStatus === 'overdue' ? 'Jatuh Tempo (Overdue)' : 'Menunggu (Pending)');
+
+                details.style.display = 'flex';
+
+            } catch (err) {
+                console.error("Verification error:", err);
+                banner.className = 'status-banner invalid';
+                banner.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> INVOICE TIDAK TERDAFTAR / DILAPORKAN PALSU';
+                errorMsg.style.display = 'block';
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', verifyInvoice);
+    </script>
+</body>
+</html>
