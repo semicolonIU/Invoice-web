@@ -12,6 +12,8 @@ let currentPage = 1;
 let itemsPerPage = 10;
 let totalItems = 0;
 let statsData = []; // Cache for stats and metadata
+let searchDebounceTimer = null; // Debounce timer for search
+let searchFilteredData = null; // Hasil filter client-side (null = tidak ada active search)
 
 const views = {
     dashboard: document.getElementById('view-dashboard'),
@@ -200,6 +202,173 @@ window.handleClientSelect = function(element) {
 }
 
 
+// ══════════════════════════════════════════════════════
+//  NOTIFICATION SYSTEM – Pengingat Invoice Sewa
+// ══════════════════════════════════════════════════════
+
+let notifications = [];   // array of notif objects
+let notifDismissed = JSON.parse(localStorage.getItem('notif_dismissed') || '[]');
+
+/**
+ * Cek invoice sewa yang akan habis dalam 7 hari.
+ * Dipanggil setelah statsData/currentInvoices tersedia.
+ */
+function checkRentalNotifications(docs) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const newNotifs = [];
+
+    docs.forEach(inv => {
+        try {
+            const noteData = inv.note
+                ? (typeof inv.note === 'string' ? JSON.parse(inv.note) : inv.note)
+                : null;
+
+            if (!noteData || !noteData.rental || !noteData.rental.akhir) return;
+
+            const endDate = new Date(noteData.rental.akhir);
+            endDate.setHours(0, 0, 0, 0);
+            const diffDays = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
+
+            // Hanya notifikasi untuk yang akan habis dalam 7 hari ke depan (termasuk sudah lewat = 0 atau negatif)
+            if (diffDays > 7) return;
+
+            const clientName = Array.isArray(inv.clientName) ? inv.clientName[0] : inv.clientName;
+            const key = `${inv.$id}_${noteData.rental.akhir}`;
+
+            let level, label, icon;
+            if (diffDays < 0) {
+                level = 'urgent'; icon = 'fa-triangle-exclamation';
+                label = `Sudah berakhir ${Math.abs(diffDays)} hari lalu`;
+            } else if (diffDays === 0) {
+                level = 'urgent'; icon = 'fa-triangle-exclamation';
+                label = 'Berakhir hari ini!';
+            } else if (diffDays === 1) {
+                level = 'urgent'; icon = 'fa-fire';
+                label = 'Berakhir besok!';
+            } else if (diffDays <= 3) {
+                level = 'warning'; icon = 'fa-clock';
+                label = `${diffDays} hari lagi`;
+            } else {
+                level = 'info'; icon = 'fa-bell';
+                label = `${diffDays} hari lagi`;
+            }
+
+            newNotifs.push({
+                id: key,
+                invoiceId: inv.$id,
+                noInvoice: inv.NoInvoice || '-',
+                clientName,
+                endDate: endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
+                diffDays,
+                level,
+                icon,
+                label,
+                dismissed: notifDismissed.includes(key)
+            });
+        } catch(e) {}
+    });
+
+    // Urutkan: paling dekat / sudah lewat duluan
+    newNotifs.sort((a, b) => a.diffDays - b.diffDays);
+    notifications = newNotifs;
+    renderNotifications();
+}
+
+function renderNotifications() {
+    const badge   = document.getElementById('notif-badge');
+    const listEl  = document.getElementById('notif-list');
+    const bellBtn = document.getElementById('notif-bell-btn');
+    if (!badge || !listEl || !bellBtn) return;
+
+    const active = notifications.filter(n => !n.dismissed);
+
+    // Update badge
+    if (active.length > 0) {
+        badge.style.display = 'flex';
+        badge.textContent = active.length > 99 ? '99+' : active.length;
+        bellBtn.classList.add('has-notif');
+    } else {
+        badge.style.display = 'none';
+        bellBtn.classList.remove('has-notif');
+    }
+
+    // Render list
+    if (notifications.length === 0) {
+        listEl.innerHTML = '<div class="notif-empty"><i class="fa-solid fa-inbox"></i><br>Tidak ada notifikasi</div>';
+        return;
+    }
+
+    listEl.innerHTML = '';
+    notifications.forEach(n => {
+        const item = document.createElement('div');
+        item.className = `notif-item ${n.level} ${n.dismissed ? 'dismissed' : ''}`;
+        item.style.opacity = n.dismissed ? '0.45' : '1';
+        item.innerHTML = `
+            <div class="notif-item-icon"><i class="fa-solid ${n.icon}"></i></div>
+            <div class="notif-item-body">
+                <div class="notif-item-title">${n.noInvoice} – ${n.clientName || '-'}</div>
+                <div class="notif-item-desc">Sewa berakhir: ${n.endDate}</div>
+                <div class="notif-item-time">${n.label}</div>
+            </div>
+            <button class="notif-dismiss-btn" title="${n.dismissed ? 'Sudah dibaca' : 'Tandai sudah dibaca'}">
+                <i class="fa-solid ${n.dismissed ? 'fa-check-circle' : 'fa-check'}"></i>
+            </button>
+        `;
+        // Tombol dismiss per item
+        const dismissBtn = item.querySelector('.notif-dismiss-btn');
+        dismissBtn.onclick = (e) => {
+            e.stopPropagation(); // jangan trigger klik item
+            dismissNotification(n.id);
+        };
+        // Klik body item → buka dashboard
+        item.onclick = (e) => {
+            if (e.target.closest('.notif-dismiss-btn')) return;
+            showDashboard();
+            toggleNotifPanel(false);
+        };
+        listEl.appendChild(item);
+    });
+}
+
+window.toggleNotifPanel = function(forceState) {
+    const panel = document.getElementById('notif-panel');
+    if (!panel) return;
+    const isOpen = panel.style.display !== 'none';
+    const shouldOpen = forceState !== undefined ? forceState : !isOpen;
+    panel.style.display = shouldOpen ? 'block' : 'none';
+};
+
+window.dismissNotification = function(id) {
+    const notif = notifications.find(n => n.id === id);
+    if (!notif) return;
+    notif.dismissed = !notif.dismissed; // toggle: bisa un-dismiss juga
+    if (notif.dismissed) {
+        if (!notifDismissed.includes(id)) notifDismissed.push(id);
+    } else {
+        notifDismissed = notifDismissed.filter(d => d !== id);
+    }
+    localStorage.setItem('notif_dismissed', JSON.stringify(notifDismissed));
+    renderNotifications();
+};
+
+window.clearNotifications = function() {
+    notifDismissed = notifications.map(n => n.id);
+    localStorage.setItem('notif_dismissed', JSON.stringify(notifDismissed));
+    notifications.forEach(n => n.dismissed = true);
+    renderNotifications();
+};
+
+// Tutup panel jika klik di luar area notifikasi
+document.addEventListener('click', function(e) {
+    const wrapper = document.getElementById('notif-wrapper');
+    if (wrapper && !wrapper.contains(e.target)) {
+        const panel = document.getElementById('notif-panel');
+        if (panel) panel.style.display = 'none';
+    }
+});
+
 
 // Load Invoices
 async function loadInvoices(page = 1) {
@@ -207,11 +376,12 @@ async function loadInvoices(page = 1) {
     currentPage = page;
     const offset = (page - 1) * itemsPerPage;
     const searchQuery = document.getElementById('search-input').value;
+    const typeFilter = document.getElementById('type-filter-select')?.value || 'all';
     
     try {
         tbody.innerHTML = '<tr><td colspan="7" class="text-center loading-text"><i class="fa-solid fa-spinner fa-spin"></i> Memuat data tagihan...</td></tr>';
         
-        const result = await API.getInvoices(itemsPerPage, offset, searchQuery);
+        const result = await API.getInvoices(itemsPerPage, offset, searchQuery, typeFilter);
         currentInvoices = result.documents;
         totalItems = result.total;
         
@@ -242,11 +412,21 @@ async function loadStatsAndMetadata() {
         updateStats(docs);
         // Refresh ulang metadata dengan data lengkap dari semua docs
         refreshMetadata(docs);
+        // Cek notifikasi sewa dari data lengkap
+        checkRentalNotifications(docs);
+
+        // Jika ada active search/filter saat statsData selesai dimuat, refresh hasilnya
+        const activeQuery = document.getElementById('search-input')?.value.trim().toLowerCase() || '';
+        const activeFilter = document.getElementById('type-filter-select')?.value || 'all';
+        if (activeQuery || activeFilter !== 'all') {
+            performClientSideSearch(activeQuery, activeFilter);
+        }
     } catch (e) {
         console.error("Error loading stats:", e);
         // Fallback: gunakan data yang sudah ter-render sebelumnya
         if (currentInvoices.length > 0) {
             refreshMetadata(currentInvoices);
+            checkRentalNotifications(currentInvoices);
         }
     }
 }
@@ -280,7 +460,7 @@ function renderPagination() {
         const span = document.createElement('span');
         span.className = `page-num ${i === currentPage ? 'active' : ''}`;
         span.textContent = i;
-        span.onclick = () => loadInvoices(i);
+        span.onclick = () => navigateToPage(i);
         container.appendChild(span);
     }
     
@@ -302,7 +482,22 @@ window.changePage = function(delta) {
     const newPage = currentPage + delta;
     const totalPages = Math.ceil(totalItems / itemsPerPage);
     if (newPage >= 1 && newPage <= totalPages) {
-        loadInvoices(newPage);
+        navigateToPage(newPage);
+    }
+}
+
+// Navigasi halaman — otomatis pilih mode client-side atau server-side
+function navigateToPage(page) {
+    if (searchFilteredData !== null) {
+        // Mode client-side search: paginate dari searchFilteredData
+        currentPage = page;
+        const offset = (page - 1) * itemsPerPage;
+        const pageData = searchFilteredData.slice(offset, offset + itemsPerPage);
+        currentInvoices = pageData;
+        renderInvoiceTable(pageData);
+        renderPagination();
+    } else {
+        loadInvoices(page);
     }
 }
 
@@ -374,7 +569,75 @@ function populateDL(id, values) {
 }
 
 window.filterInvoices = function() {
-    loadInvoices(1); // Real-time search with pagination
+    // Tampilkan/sembunyikan tombol clear
+    const searchInput = document.getElementById('search-input');
+    const clearBtn = document.getElementById('search-clear-btn');
+    if (clearBtn) clearBtn.style.display = searchInput?.value ? 'flex' : 'none';
+
+    clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(() => {
+        const query = searchInput.value.trim().toLowerCase();
+        const typeFilter = document.getElementById('type-filter-select')?.value || 'all';
+
+        // --- Hybrid Search: Client-side jika statsData sudah ter-cache ---
+        if (statsData.length > 0) {
+            performClientSideSearch(query, typeFilter);
+        } else {
+            // Fallback: server-side search (statsData belum ready)
+            loadInvoices(1);
+        }
+    }, 300);
+}
+
+window.clearSearch = function() {
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) searchInput.value = '';
+    const clearBtn = document.getElementById('search-clear-btn');
+    if (clearBtn) clearBtn.style.display = 'none';
+    searchFilteredData = null;
+    loadInvoices(1);
+}
+
+// Client-side search pada statsData dengan paginasi lokal
+function performClientSideSearch(query, typeFilter) {
+    // Jika tidak ada query dan filter = all, kembali ke mode server-side normal
+    if (!query && typeFilter === 'all') {
+        searchFilteredData = null;
+        loadInvoices(1);
+        return;
+    }
+
+    let filtered = statsData;
+
+    // Filter berdasarkan tipe
+    if (typeFilter === 'rental') {
+        filtered = filtered.filter(inv => String(inv.NoInvoice || '').toUpperCase().startsWith('SW'));
+    } else if (typeFilter === 'normal') {
+        filtered = filtered.filter(inv => String(inv.NoInvoice || '').toUpperCase().startsWith('INV'));
+    }
+
+    // Filter berdasarkan query pencarian (partial match, case-insensitive, multi-kata)
+    if (query) {
+        const keywords = query.split(/\s+/).filter(k => k.length > 0);
+        filtered = filtered.filter(inv => {
+            const noInv = String(inv.NoInvoice || '').toLowerCase();
+            const clientRaw = Array.isArray(inv.clientName) ? inv.clientName[0] : inv.clientName;
+            const client = String(clientRaw || '').toLowerCase();
+            // Setiap keyword dicek: minimal muncul di noInvoice ATAU clientName
+            return keywords.every(kw => noInv.includes(kw) || client.includes(kw));
+        });
+    }
+
+    // Simpan hasil filter dan render dengan paginasi lokal
+    searchFilteredData = filtered;
+    totalItems = filtered.length;
+    currentPage = 1;
+
+    const pageData = filtered.slice(0, itemsPerPage);
+    currentInvoices = pageData;
+
+    renderInvoiceTable(pageData);
+    renderPagination();
 }
 
 window.sortInvoices = function() {
@@ -384,7 +647,6 @@ window.sortInvoices = function() {
 function renderInvoiceTable(docs) {
     const tbody = document.getElementById('invoice-list');
     const sortMethod = document.getElementById('sort-select').value;
-    const typeFilter = document.getElementById('type-filter-select')?.value || 'all';
     
     // Process each doc to determine type and description
     let items = docs.map(invoice => {
@@ -405,12 +667,8 @@ function renderInvoiceTable(docs) {
         return { invoice, isRental, itemKeterangan };
     });
 
-    // Filter by type: 'normal' (Reguler) vs 'rental' (Sewa)
-    if (typeFilter === 'normal') {
-        items = items.filter(item => !item.isRental);
-    } else if (typeFilter === 'rental') {
-        items = items.filter(item => item.isRental);
-    }
+    // Catatan: filter tipe (Reguler/Sewa) kini dilakukan server-side di loadInvoices/API
+    // sehingga totalItems sudah akurat untuk pagination.
 
     // Sort
     items.sort((a, b) => {
@@ -854,6 +1112,11 @@ window.nativeShare = async function(id) {
     }
 }
 
+// Deteksi perangkat mobile (Android / iOS)
+function isMobileDevice() {
+    return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+}
+
 window.previewInvoice = async function() {
     const data = getInvoiceFormData();
     const btn = document.getElementById('preview-btn');
@@ -864,8 +1127,22 @@ window.previewInvoice = async function() {
     
     try {
         const blobUrl = await window.generatePDF(data, 'preview');
-        document.getElementById('preview-iframe').src = blobUrl;
-        document.getElementById('preview-modal').style.display = 'flex';
+
+        if (isMobileDevice()) {
+            // Android/iOS: iframe tidak support blob PDF — buka di tab baru
+            const newTab = window.open(blobUrl, '_blank');
+            // Jika popup diblokir browser, fallback ke download langsung
+            if (!newTab) {
+                const a = document.createElement('a');
+                a.href = blobUrl;
+                a.download = `${data.noInvoice || 'invoice'}.pdf`;
+                a.click();
+            }
+        } else {
+            // Desktop: tampilkan di modal iframe seperti biasa
+            document.getElementById('preview-iframe').src = blobUrl;
+            document.getElementById('preview-modal').style.display = 'flex';
+        }
     } catch (e) {
         alert('Gagal membuat pratinjau: ' + e.message);
     } finally {
@@ -934,6 +1211,11 @@ window.handleLogout = async function() {
 };
 
 function initAndLoad() {
+    // Sesuaikan label tombol pratinjau berdasarkan perangkat
+    const labelEl = document.getElementById('preview-btn-label');
+    if (labelEl && isMobileDevice()) {
+        labelEl.textContent = 'Buka PDF';
+    }
     loadInvoices(1);
 }
 

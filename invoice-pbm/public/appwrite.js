@@ -50,7 +50,7 @@ const API = {
         }
     },
     
-    async getInvoices(limit = 10, offset = 0, searchQuery = "") {
+    async getInvoices(limit = 10, offset = 0, searchQuery = "", typeFilter = "all") {
         this.checkContext();
         try {
             const queries = [
@@ -60,12 +60,19 @@ const API = {
             ];
 
             if (searchQuery) {
-                // Mencari berdasarkan NoInvoice atau clientName (Jika clientName adalah array/string)
-                // Catatan: Appwrite search query membutuhkan index full-text atau match
+                // Mencari berdasarkan NoInvoice atau clientName
                 queries.push(Appwrite.Query.or([
                     Appwrite.Query.contains('NoInvoice', [searchQuery]),
                     Appwrite.Query.contains('clientName', [searchQuery])
                 ]));
+            }
+
+            // Filter tipe: Sewa prefix 'SW', Reguler prefix 'INV'
+            if (typeFilter === 'rental') {
+                queries.push(Appwrite.Query.startsWith('NoInvoice', 'SW'));
+            } else if (typeFilter === 'normal') {
+                // Reguler menggunakan prefix 'INV' (sesuai generateInvNumber)
+                queries.push(Appwrite.Query.startsWith('NoInvoice', 'INV'));
             }
 
             const response = await databases.listDocuments(APPWRITE_DATABASE, APPWRITE_COLLECTION, queries);
