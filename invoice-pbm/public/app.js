@@ -48,25 +48,53 @@ function showCreate(type = 'normal') {
     editingId = null;
     switchView('create'); 
     resetForm(); 
-    
-    // Add logic to hide sidebar just in case
     closeMobileSidebar();
-    const isRental = type === 'rental';
-    document.getElementById('inv-type').value = type;
-    document.getElementById('form-title').textContent = isRental ? 'Buat Invoice Sewa' : 'Buat Invoice Reguler';
+    window.setFormType(type);
     document.getElementById('submit-btn').innerHTML = '<i class="fa-solid fa-save"></i> Simpan ke Appwrite';
+}
+
+window.setFormType = function(type) {
+    const isRental = type === 'rental';
+    const targetType = isRental ? 'rental' : 'normal';
     
-    // Toggle fields visibility
+    document.getElementById('inv-type').value = targetType;
+    
+    // Update Switch Buttons Active State
+    const normalBtn = document.getElementById('switch-type-normal');
+    const rentalBtn = document.getElementById('switch-type-rental');
+    if (normalBtn) normalBtn.classList.toggle('active', !isRental);
+    if (rentalBtn) rentalBtn.classList.toggle('active', isRental);
+    
+    // Update Sidebar Navigation Active State
+    if (navs.create) navs.create.classList.toggle('active', !isRental);
+    const navRental = document.getElementById('nav-create-rental');
+    if (navRental) navRental.classList.toggle('active', isRental);
+
+    // Update Form Title
+    const isEditing = Boolean(editingId);
+    document.getElementById('form-title').textContent = isEditing 
+        ? (isRental ? 'Edit Invoice Sewa' : 'Edit Invoice Reguler')
+        : (isRental ? 'Buat Invoice Sewa' : 'Buat Invoice Reguler');
+
+    // Toggle Field Visibilities
     document.querySelectorAll('.rental-only').forEach(el => el.style.display = isRental ? 'flex' : 'none');
     document.querySelectorAll('.normal-only').forEach(el => el.style.display = isRental ? 'none' : 'block');
+    
+    // Toggle Item Table Columns
     document.querySelectorAll('.item-extra-col').forEach(el => el.style.display = isRental ? 'none' : 'block');
     document.querySelectorAll('.rental-desc-col').forEach(el => el.style.display = isRental ? 'block' : 'none');
-    
-    // Auto-prefix No. Invoice
-    window.generateInvNumber(isRental ? 'SW' : 'INV');
 
-    // Auto-fill last notes for rental
-    if (isRental) {
+    // Adjust Invoice Number Prefix if using standard prefix pattern
+    const invNumInput = document.getElementById('inv-number');
+    if (invNumInput && !editingId) {
+        let val = invNumInput.value.trim();
+        if (!val || val.startsWith('INV') || val.startsWith('SW')) {
+            window.generateInvNumber(isRental ? 'SW' : 'INV');
+        }
+    }
+
+    // Auto-fill last notes for rental if empty
+    if (isRental && !document.getElementById('inv-notes').value.trim()) {
         let lastNotes = '';
         const invoicesToSearch = statsData.length > 0 ? statsData : currentInvoices;
         for (let inv of invoicesToSearch) {
@@ -356,16 +384,42 @@ window.sortInvoices = function() {
 function renderInvoiceTable(docs) {
     const tbody = document.getElementById('invoice-list');
     const sortMethod = document.getElementById('sort-select').value;
+    const typeFilter = document.getElementById('type-filter-select')?.value || 'all';
     
-    // Clone and Sort
-    let items = [...docs];
+    // Process each doc to determine type and description
+    let items = docs.map(invoice => {
+        let isRental = false;
+        let itemKeterangan = '-';
+        try {
+            const data = typeof invoice.items === 'string' ? JSON.parse(invoice.items) : invoice.items;
+            const noteData = invoice.note ? (typeof invoice.note === 'string' ? JSON.parse(invoice.note) : invoice.note) : null;
+            
+            isRental = (noteData && noteData.type === 'rental') || 
+                       (data && data.type === 'rental') || 
+                       (invoice.NoInvoice && String(invoice.NoInvoice).toUpperCase().startsWith('SW')) ||
+                       Boolean(noteData && noteData.rental && (noteData.rental.awal || noteData.rental.akhir));
+            const arr = noteData ? (Array.isArray(data) ? data : []) : (data?.itemList || (Array.isArray(data) ? data : []));
+            itemKeterangan = arr.map(i => i.name).join(', ') || '-';
+            if (itemKeterangan.length > 50) itemKeterangan = itemKeterangan.substring(0, 50) + '...';
+        } catch(e) {}
+        return { invoice, isRental, itemKeterangan };
+    });
+
+    // Filter by type: 'normal' (Reguler) vs 'rental' (Sewa)
+    if (typeFilter === 'normal') {
+        items = items.filter(item => !item.isRental);
+    } else if (typeFilter === 'rental') {
+        items = items.filter(item => item.isRental);
+    }
+
+    // Sort
     items.sort((a, b) => {
         if (sortMethod === 'createdAt') {
-            return new Date(b.$createdAt) - new Date(a.$createdAt);
+            return new Date(b.invoice.$createdAt) - new Date(a.invoice.$createdAt);
         } else if (sortMethod === 'dateNewest') {
-            return new Date(b.date) - new Date(a.date);
+            return new Date(b.invoice.date) - new Date(a.invoice.date);
         } else if (sortMethod === 'dateOldest') {
-            return new Date(a.date) - new Date(b.date);
+            return new Date(a.invoice.date) - new Date(b.invoice.date);
         }
         return 0;
     });
@@ -376,19 +430,7 @@ function renderInvoiceTable(docs) {
     }
 
     tbody.innerHTML = '';
-    items.forEach(invoice => {
-        let isRental = false;
-        let itemKeterangan = '-';
-        try {
-            const data = typeof invoice.items === 'string' ? JSON.parse(invoice.items) : invoice.items;
-            const noteData = invoice.note ? (typeof invoice.note === 'string' ? JSON.parse(invoice.note) : invoice.note) : null;
-            
-            isRental = noteData ? (noteData.type === 'rental') : (data?.type === 'rental');
-            const arr = noteData ? (Array.isArray(data) ? data : []) : (data?.itemList || (Array.isArray(data) ? data : []));
-            itemKeterangan = arr.map(i => i.name).join(', ') || '-';
-            if (itemKeterangan.length > 50) itemKeterangan = itemKeterangan.substring(0, 50) + '...';
-        } catch(e) {}
-
+    items.forEach(({ invoice, isRental, itemKeterangan }) => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>
@@ -408,6 +450,7 @@ function renderInvoiceTable(docs) {
             </td>
             <td class="action-cell">
                 <div class="action-wrapper">
+                    ${isRental ? `<button class="btn btn-success btn-action" onclick="createRentalForThisMonth('${invoice.$id}')" title="Buat Invoice Sewa Bulan Ini"><i class="fa-solid fa-calendar-plus"></i></button>` : ''}
                     <button class="btn btn-primary btn-action" onclick="nativeShare('${invoice.$id}')" title="Share"><i class="fa-solid fa-share-nodes"></i></button>
                     <button class="btn btn-secondary btn-action" onclick="downloadPDF('${invoice.$id}')" title="PDF"><i class="fa-solid fa-download"></i></button>
                     <button class="btn btn-warning btn-action" onclick="editInvoice('${invoice.$id}')" title="Edit"><i class="fa-solid fa-pen-to-square"></i></button>
@@ -600,8 +643,7 @@ window.editInvoice = function(id) {
 
     showCreate(invType); // Switch view and reset form based on type
     editingId = id; // re-set because showCreate resets it
-
-    document.getElementById('form-title').textContent = invType === 'rental' ? 'Edit Invoice Sewa' : 'Edit Invoice Reguler';
+    window.setFormType(invType);
     document.getElementById('submit-btn').innerHTML = '<i class="fa-solid fa-save"></i> Perbarui Invoice';
 
     // Populate common data
@@ -643,6 +685,104 @@ window.editInvoice = function(id) {
             row.querySelector('.item-tb').value    = (tbVal && tbVal !== "NO-ENTRY") ? tbVal : '';
             row.querySelector('.item-bg').value    = (bgVal && bgVal !== "NO-ENTRY") ? bgVal : '';
             if(row.querySelector('.item-desc')) row.querySelector('.item-desc').value = descVal || '';
+            
+            document.getElementById('items-container').appendChild(row);
+        });
+    } else {
+        addItemRow();
+    }
+    
+    calculateTotal();
+}
+
+window.createRentalForThisMonth = function(id) {
+    const invoice = currentInvoices.find(v => v.$id === id);
+    if (!invoice) return;
+
+    let savedNotes = '';
+    let itemsArray = [];
+    let descArr = [];
+
+    try {
+        const itemObj = typeof invoice.items === 'string' ? JSON.parse(invoice.items) : invoice.items;
+        const noteObj = invoice.note ? (typeof invoice.note === 'string' ? JSON.parse(invoice.note) : invoice.note) : null;
+
+        if (noteObj) {
+            savedNotes = noteObj.notes || '';
+            descArr = noteObj.desc || [];
+            itemsArray = Array.isArray(itemObj) ? itemObj : [];
+        } else {
+            savedNotes = itemObj?.notes || '';
+            if (itemObj && itemObj.itemList) {
+                itemsArray = itemObj.itemList;
+            } else {
+                itemsArray = Array.isArray(itemObj) ? itemObj : [];
+            }
+        }
+    } catch(e) {}
+
+    // Open form in rental create mode (editingId stays null for new invoice creation)
+    showCreate('rental');
+
+    document.getElementById('form-title').textContent = 'Buat Invoice Sewa (Bulan Ini)';
+
+    // Populate client & basic data
+    document.getElementById('inv-client').value = (Array.isArray(invoice.clientName) ? invoice.clientName[0] : invoice.clientName) || '';
+    document.getElementById('inv-wa').value     = invoice.clientAddress || '';
+    document.getElementById('inv-notes').value  = savedNotes;
+
+    // Calculate dates for CURRENT MONTH
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth(); // 0-indexed
+    
+    // Set invoice date to today
+    document.getElementById('inv-date').value = now.toISOString().split('T')[0];
+
+    // Determine day of month from original rental date if available, or default to day 1
+    let originalDay = 1;
+    try {
+        const noteObj = invoice.note ? (typeof invoice.note === 'string' ? JSON.parse(invoice.note) : invoice.note) : null;
+        if (noteObj && noteObj.rental && noteObj.rental.awal) {
+            const origDate = new Date(noteObj.rental.awal);
+            if (!isNaN(origDate.getTime())) {
+                originalDay = origDate.getDate();
+            }
+        }
+    } catch(e) {}
+
+    // Ensure day does not exceed max days in current month
+    const maxDays = new Date(curYear, curMonth + 1, 0).getDate();
+    const startDay = Math.min(originalDay, maxDays);
+    
+    const startDateObj = new Date(curYear, curMonth, startDay);
+    const endDateObj = new Date(curYear, curMonth + 1, startDay);
+
+    const formatISO = (d) => {
+        const y = d.getFullYear();
+        const m = (d.getMonth() + 1).toString().padStart(2, '0');
+        const day = d.getDate().toString().padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    };
+
+    document.getElementById('sewa-awal').value  = formatISO(startDateObj);
+    document.getElementById('sewa-akhir').value = formatISO(endDateObj);
+
+    // Populate items
+    document.getElementById('items-container').innerHTML = '';
+    itemCount = 0;
+
+    if (itemsArray.length > 0) {
+        itemsArray.forEach((item, idx) => {
+            itemCount++;
+            const row = createItemRow(itemCount);
+            
+            row.querySelector('.item-name').value  = item.name || '';
+            row.querySelector('.item-qty').value   = item.qty || 1;
+            row.querySelector('.item-price').value = item.price || 0;
+
+            const descVal = descArr[idx] !== undefined ? descArr[idx] : item.desc;
+            if (row.querySelector('.item-desc')) row.querySelector('.item-desc').value = descVal || '';
             
             document.getElementById('items-container').appendChild(row);
         });

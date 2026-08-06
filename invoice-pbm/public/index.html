@@ -104,6 +104,11 @@
                             <i class="fa-solid fa-magnifying-glass"></i>
                             <input type="text" id="search-input" placeholder="Cari klien atau nomor..." oninput="filterInvoices()">
                         </div>
+                        <select id="type-filter-select" onchange="filterInvoices()">
+                            <option value="all">Tipe: Semua Invoice</option>
+                            <option value="normal">Tipe: Reguler</option>
+                            <option value="rental">Tipe: Sewa</option>
+                        </select>
                         <select id="sort-select" onchange="sortInvoices()">
                             <option value="createdAt">Urut: Teranyar dibuat</option>
                             <option value="dateNewest">Urut: Tanggal Invoice (Baru)</option>
@@ -142,8 +147,18 @@
 
             <div id="view-create" class="view-section" style="display:none;">
                 <div class="controls-bar">
-                    <h3 id="form-title">Formulir Invoice Baru</h3>
-                    <div style="display: flex; gap: 10px;">
+                    <div class="form-title-wrapper">
+                        <h3 id="form-title">Formulir Invoice Baru</h3>
+                        <div class="form-type-switch" role="group" aria-label="Tipe Invoice">
+                            <button type="button" class="switch-btn active" id="switch-type-normal" onclick="setFormType('normal')">
+                                <i class="fa-solid fa-file-invoice"></i> Invoice Reguler
+                            </button>
+                            <button type="button" class="switch-btn" id="switch-type-rental" onclick="setFormType('rental')">
+                                <i class="fa-solid fa-truck-ramp-box"></i> Invoice Sewa
+                            </button>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
                         <input type="file" id="scan-pdf-input" accept=".pdf" style="display: none;" onchange="handlePdfScan(this)">
                         <button class="btn btn-scan" onclick="document.getElementById('scan-pdf-input').click()"><i class="fa-solid fa-wand-magic-sparkles"></i> Scan PDF</button>
                         <button class="btn btn-secondary" onclick="showDashboard()"><i class="fa-solid fa-arrow-left"></i> Kembali</button>
