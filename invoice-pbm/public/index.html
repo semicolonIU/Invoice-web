@@ -14,6 +14,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
     <!-- FontAwesome for PDF icon fonts (optional proxy) -->
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <div id="view-login" class="login-wrapper">
@@ -60,6 +62,7 @@
             </div>
             <nav>
                 <a href="#" class="active" id="nav-dashboard"><i class="fa-solid fa-chart-pie"></i> Dashboard</a>
+                <a href="#" id="nav-analytics"><i class="fa-solid fa-chart-line"></i> Analitik Bisnis</a>
                 <a href="#" id="nav-create"><i class="fa-solid fa-plus"></i> Invoice Reguler</a>
                 <a href="#" id="nav-create-rental"><i class="fa-solid fa-truck-ramp-box"></i> Invoice Sewa</a>
 
@@ -159,6 +162,115 @@
                     </div>
                     <button class="btn btn-outline btn-sm" id="next-btn" onclick="changePage(1)">Next <i class="fa-solid fa-chevron-right"></i></button>
                     <span class="total-info" id="total-info">Total: 0</span>
+                </div>
+            </div>
+
+            <!-- View Analytics & Kesehatan Bisnis -->
+            <div id="view-analytics" class="view-section" style="display:none;">
+                <div class="analytics-header">
+                    <div>
+                        <h2><i class="fa-solid fa-heart-pulse text-indigo"></i> Dashboard Kesehatan Bisnis</h2>
+                        <p class="text-muted">Analisis tren performa keuangan, demografi pelanggan, dan distribusi tagihan</p>
+                    </div>
+                    <div class="analytics-filter-range">
+                        <button class="analytics-range-btn" onclick="setAnalyticsRange(3)">3 Bulan</button>
+                        <button class="analytics-range-btn active" onclick="setAnalyticsRange(6)">6 Bulan</button>
+                        <button class="analytics-range-btn" onclick="setAnalyticsRange(12)">12 Bulan</button>
+                    </div>
+                </div>
+
+                <!-- KPI Cards -->
+                <div class="stats-grid analytics-kpi-grid">
+                    <div class="stat-card kpi-card">
+                        <div class="stat-icon kpi-icon-blue"><i class="fa-solid fa-coins"></i></div>
+                        <div class="stat-info">
+                            <span class="stat-label">Total Pendapatan (YTD)</span>
+                            <h4 id="analytics-kpi-ytd">Rp 0</h4>
+                            <span id="analytics-kpi-ytd-change" class="kpi-change neutral"><i class="fa-solid fa-minus"></i> 0% vs bln lalu</span>
+                        </div>
+                    </div>
+                    <div class="stat-card kpi-card">
+                        <div class="stat-icon kpi-icon-green"><i class="fa-solid fa-calendar-day"></i></div>
+                        <div class="stat-info">
+                            <span class="stat-label">Pendapatan Bulan Ini</span>
+                            <h4 id="analytics-kpi-month">Rp 0</h4>
+                            <span id="analytics-kpi-month-change" class="kpi-change neutral"><i class="fa-solid fa-minus"></i> 0% vs bln lalu</span>
+                        </div>
+                    </div>
+                    <div class="stat-card kpi-card">
+                        <div class="stat-icon kpi-icon-purple"><i class="fa-solid fa-circle-check"></i></div>
+                        <div class="stat-info">
+                            <span class="stat-label">Tingkat Lunas (Paid)</span>
+                            <h4 id="analytics-kpi-paid-rate">0%</h4>
+                            <span id="analytics-kpi-paid-count" class="kpi-subtext">0 dari 0 invoice</span>
+                        </div>
+                    </div>
+                    <div class="stat-card kpi-card">
+                        <div class="stat-icon kpi-icon-orange"><i class="fa-solid fa-users-gear"></i></div>
+                        <div class="stat-info">
+                            <span class="stat-label">Pelanggan Aktif</span>
+                            <h4 id="analytics-kpi-active-clients">0</h4>
+                            <span id="analytics-kpi-new-clients-count" class="kpi-subtext">0 pelanggan baru (30hr)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Row 1: Tren Pendapatan -->
+                <div class="analytics-row">
+                    <div class="chart-card full-width">
+                        <div class="chart-card-header">
+                            <div>
+                                <h3><i class="fa-solid fa-chart-column text-indigo"></i> Tren Pendapatan Bulanan</h3>
+                                <p class="chart-subtitle">Ringkasan estimasi arus kas masuk berdasarkan invoice yang diterbitkan</p>
+                            </div>
+                        </div>
+                        <div class="chart-body" style="height: 300px; position: relative;">
+                            <canvas id="chart-revenue-trend"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Row 2: Donut Charts (Komposisi Tipe & Status) -->
+                <div class="analytics-grid-2col">
+                    <div class="chart-card">
+                        <div class="chart-card-header">
+                            <h3><i class="fa-solid fa-pie-chart text-pink"></i> Tipe Invoice</h3>
+                        </div>
+                        <div class="chart-body" style="height: 240px; position: relative;">
+                            <canvas id="chart-type-donut"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-card-header">
+                            <h3><i class="fa-solid fa-chart-donut text-emerald"></i> Status Pembayaran</h3>
+                        </div>
+                        <div class="chart-body" style="height: 240px; position: relative;">
+                            <canvas id="chart-payment-donut"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section Row 3: Top Pelanggan & Pelanggan Baru -->
+                <div class="analytics-grid-2col" style="margin-top: 20px;">
+                    <!-- Top 5 Pelanggan -->
+                    <div class="chart-card">
+                        <div class="chart-card-header">
+                            <h3><i class="fa-solid fa-trophy text-amber"></i> Top 5 Pelanggan Paling Aktif</h3>
+                        </div>
+                        <div class="top-clients-list" id="analytics-top-clients">
+                            <div class="empty-analytics text-muted">Belum ada data pelanggan</div>
+                        </div>
+                    </div>
+
+                    <!-- Pelanggan Baru (30 Hari) -->
+                    <div class="chart-card">
+                        <div class="chart-card-header">
+                            <h3><i class="fa-solid fa-user-plus text-cyan"></i> Pelanggan Baru (30 Hari Terakhir)</h3>
+                        </div>
+                        <div class="new-clients-list" id="analytics-new-clients">
+                            <div class="empty-analytics text-muted">Belum ada pelanggan baru</div>
+                        </div>
+                    </div>
                 </div>
             </div>
 

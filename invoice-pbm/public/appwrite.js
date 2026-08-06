@@ -60,11 +60,15 @@ const API = {
             ];
 
             if (searchQuery) {
-                // Mencari berdasarkan NoInvoice atau clientName
-                queries.push(Appwrite.Query.or([
-                    Appwrite.Query.contains('NoInvoice', [searchQuery]),
-                    Appwrite.Query.contains('clientName', [searchQuery])
-                ]));
+                // Split query into individual terms for fuzzy matching
+                const terms = searchQuery.trim().split(/\s+/);
+                // For each term, add an OR that searches both NoInvoice and clientName
+                terms.forEach(term => {
+                    queries.push(Appwrite.Query.or([
+                        Appwrite.Query.search('NoInvoice', term),
+                        Appwrite.Query.search('clientName', term)
+                    ]));
+                });
             }
 
             // Filter tipe: Sewa prefix 'SW', Reguler prefix 'INV'

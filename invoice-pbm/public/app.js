@@ -15,12 +15,20 @@ let statsData = []; // Cache for stats and metadata
 let searchDebounceTimer = null; // Debounce timer for search
 let searchFilteredData = null; // Hasil filter client-side (null = tidak ada active search)
 
+// Analytics Chart Instances & State
+let revenueChart = null;
+let typeChart = null;
+let paymentChart = null;
+let analyticsRangeMonths = 6;
+
 const views = {
     dashboard: document.getElementById('view-dashboard'),
+    analytics: document.getElementById('view-analytics'),
     create: document.getElementById('view-create')
 };
 const navs = {
     dashboard: document.getElementById('nav-dashboard'),
+    analytics: document.getElementById('nav-analytics'),
     create: document.getElementById('nav-create')
 };
 
@@ -32,14 +40,15 @@ function closeMobileSidebar() {
 }
 
 function switchView(viewName) {
-    Object.values(views).forEach(v => v.style.display = 'none');
-    Object.values(navs).forEach(n => n.classList.remove('active'));
-    views[viewName].style.display = 'block';
-    if(navs[viewName]) navs[viewName].classList.add('active');
+    Object.values(views).forEach(v => { if (v) v.style.display = 'none'; });
+    Object.values(navs).forEach(n => { if (n) n.classList.remove('active'); });
+    if (views[viewName]) views[viewName].style.display = 'block';
+    if (navs[viewName]) navs[viewName].classList.add('active');
     closeMobileSidebar();
 }
 
 document.getElementById('nav-dashboard').addEventListener('click', () => { switchView('dashboard'); loadInvoices(1); });
+document.getElementById('nav-analytics')?.addEventListener('click', () => { switchView('analytics'); renderAnalyticsDashboard(); });
 document.getElementById('nav-create').addEventListener('click', () => { showCreate('normal'); });
 document.getElementById('nav-create-rental').addEventListener('click', () => { showCreate('rental'); });
 
@@ -414,6 +423,8 @@ async function loadStatsAndMetadata() {
         refreshMetadata(docs);
         // Cek notifikasi sewa dari data lengkap
         checkRentalNotifications(docs);
+        // Render Dashboard Analitik Kesehatan Bisnis
+        renderAnalyticsDashboard(docs);
 
         // Jika ada active search/filter saat statsData selesai dimuat, refresh hasilnya
         const activeQuery = document.getElementById('search-input')?.value.trim().toLowerCase() || '';
@@ -427,6 +438,7 @@ async function loadStatsAndMetadata() {
         if (currentInvoices.length > 0) {
             refreshMetadata(currentInvoices);
             checkRentalNotifications(currentInvoices);
+            renderAnalyticsDashboard(currentInvoices);
         }
     }
 }
@@ -1476,10 +1488,374 @@ function showNextJsError(message) {
         
         // Auto hide after 8 seconds to give time to read long errors
         setTimeout(() => {
-            toast.style.display = 'none';
+            if (toast) toast.style.display = 'none';
         }, 8000);
     } else {
         alert("Error Detail: " + message);
     }
+}
+
+/* ==========================================================================
+   Business Health Analytics Engine
+   ========================================================================== */
+
+window.setAnalyticsRange = function(months) {
+    analyticsRangeMonths = months;
+    
+    // Update active button state
+    document.querySelectorAll('.analytics-range-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.textContent.includes(months + ' Bulan')) {
+            btn.classList.add('active');
+        }
+    });
+
+    renderAnalyticsDashboard();
+}
+
+function renderAnalyticsDashboard(docsTarget) {
+    const docs = docsTarget || (statsData.length > 0 ? statsData : currentInvoices);
+    if (!docs || docs.length === 0) return;
+
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+
+    // 1. Calculate KPI Metrics
+    let totalYtd = 0;
+    let totalThisMonth = 0;
+    let totalLastMonth = 0;
+    let paidCount = 0;
+    
+    const clientFirstDates = {}; // clientName -> earliest Date
+    const clientTotals = {};     // clientName -> { total: number, count: number }
+    const typeCounts = { rental: 0, normal: 0 };
+    const paymentCounts = { paid: 0, pending: 0, overdue: 0 };
+
+    docs.forEach(inv => {
+        const invDate = new Date(inv.date || inv.$createdAt);
+        const amount = Number(inv.totalAmount) || 0;
+        const cName = Array.isArray(inv.clientName) ? inv.clientName[0] : (inv.clientName || 'Tidak Diketahui');
+        
+        // Check Type
+        let isRental = false;
+        try {
+            const data = typeof inv.items === 'string' ? JSON.parse(inv.items) : inv.items;
+            const noteData = inv.note ? (typeof inv.note === 'string' ? JSON.parse(inv.note) : inv.note) : null;
+            isRental = (noteData && noteData.type === 'rental') || 
+                       (data && data.type === 'rental') || 
+                       (inv.NoInvoice && String(inv.NoInvoice).toUpperCase().startsWith('SW')) ||
+                       Boolean(noteData && noteData.rental && (noteData.rental.awal || noteData.rental.akhir));
+        } catch(e) {}
+
+        if (isRental) typeCounts.rental++;
+        else typeCounts.normal++;
+
+        // Check Payment Status
+        const status = (inv.paymentStatus || 'pending').toLowerCase();
+        if (status === 'paid') {
+            paymentCounts.paid++;
+            paidCount++;
+        } else if (status === 'overdue') {
+            paymentCounts.overdue++;
+        } else {
+            paymentCounts.pending++;
+        }
+
+        // YTD & Monthly Totals
+        if (invDate.getFullYear() === currentYear) {
+            totalYtd += amount;
+        }
+
+        if (invDate.getFullYear() === currentYear && invDate.getMonth() === currentMonth) {
+            totalThisMonth += amount;
+        }
+
+        // Last Month calculation for delta
+        const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        if (invDate.getFullYear() === lastMonthDate.getFullYear() && invDate.getMonth() === lastMonthDate.getMonth()) {
+            totalLastMonth += amount;
+        }
+
+        // Client Aggregation
+        if (!clientTotals[cName]) {
+            clientTotals[cName] = { total: 0, count: 0 };
+        }
+        clientTotals[cName].total += amount;
+        clientTotals[cName].count += 1;
+
+        // Track Earliest Date per Client
+        if (!clientFirstDates[cName] || invDate < clientFirstDates[cName]) {
+            clientFirstDates[cName] = invDate;
+        }
+    });
+
+    // 2. Render KPI Cards
+    const ytdEl = document.getElementById('analytics-kpi-ytd');
+    if (ytdEl) ytdEl.textContent = 'Rp ' + totalYtd.toLocaleString('id-ID');
+
+    const monthEl = document.getElementById('analytics-kpi-month');
+    if (monthEl) monthEl.textContent = 'Rp ' + totalThisMonth.toLocaleString('id-ID');
+
+    // Monthly Delta
+    const monthChangeEl = document.getElementById('analytics-kpi-month-change');
+    if (monthChangeEl) {
+        if (totalLastMonth > 0) {
+            const pct = Math.round(((totalThisMonth - totalLastMonth) / totalLastMonth) * 100);
+            const isUp = pct >= 0;
+            monthChangeEl.className = `kpi-change ${isUp ? 'up' : 'down'}`;
+            monthChangeEl.innerHTML = `<i class="fa-solid fa-arrow-${isUp ? 'up' : 'down'}"></i> ${Math.abs(pct)}% vs bln lalu`;
+        } else {
+            monthChangeEl.className = 'kpi-change neutral';
+            monthChangeEl.innerHTML = '<i class="fa-solid fa-minus"></i> 0% vs bln lalu';
+        }
+    }
+
+    // Paid Rate
+    const totalDocs = docs.length;
+    const paidRatePct = totalDocs > 0 ? Math.round((paidCount / totalDocs) * 100) : 0;
+    const paidRateEl = document.getElementById('analytics-kpi-paid-rate');
+    if (paidRateEl) paidRateEl.textContent = paidRatePct + '%';
+    
+    const paidCountEl = document.getElementById('analytics-kpi-paid-count');
+    if (paidCountEl) paidCountEl.textContent = `${paidCount} dari ${totalDocs} invoice lunas`;
+
+    // Active Clients & New Clients (30 days)
+    const activeClientsCount = Object.keys(clientTotals).length;
+    const activeClientsEl = document.getElementById('analytics-kpi-active-clients');
+    if (activeClientsEl) activeClientsEl.textContent = activeClientsCount;
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    const newClients = Object.entries(clientFirstDates)
+        .filter(([_, firstDate]) => firstDate >= thirtyDaysAgo)
+        .map(([name, firstDate]) => ({ name, date: firstDate, amount: clientTotals[name]?.total || 0 }));
+
+    const newClientsCountEl = document.getElementById('analytics-kpi-new-clients-count');
+    if (newClientsCountEl) newClientsCountEl.textContent = `${newClients.length} pelanggan baru (30hr)`;
+
+    // 3. Render Charts
+    renderRevenueTrendChart(docs, analyticsRangeMonths);
+    renderTypeDonutChart(typeCounts);
+    renderPaymentDonutChart(paymentCounts);
+
+    // 4. Render Lists (Top Clients & New Clients)
+    renderTopClientsList(clientTotals);
+    renderNewClientsList(newClients);
+}
+
+// Chart 1: Revenue Trend Bar Chart
+function renderRevenueTrendChart(docs, monthsToShow = 6) {
+    const canvas = document.getElementById('chart-revenue-trend');
+    if (!canvas || typeof Chart === 'undefined') return;
+
+    const now = new Date();
+    const monthLabels = [];
+    const monthlyTotals = Array(monthsToShow).fill(0);
+
+    for (let i = monthsToShow - 1; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        monthLabels.push(d.toLocaleDateString('id-ID', { month: 'short', year: '2-digit' }));
+    }
+
+    docs.forEach(inv => {
+        const invDate = new Date(inv.date || inv.$createdAt);
+        const amount = Number(inv.totalAmount) || 0;
+
+        for (let i = 0; i < monthsToShow; i++) {
+            const targetDate = new Date(now.getFullYear(), now.getMonth() - (monthsToShow - 1 - i), 1);
+            if (invDate.getFullYear() === targetDate.getFullYear() && invDate.getMonth() === targetDate.getMonth()) {
+                monthlyTotals[i] += amount;
+                break;
+            }
+        }
+    });
+
+    if (revenueChart) {
+        revenueChart.destroy();
+    }
+
+    const ctx = canvas.getContext('2d');
+    revenueChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: monthLabels,
+            datasets: [{
+                label: 'Pendapatan (Rp)',
+                data: monthlyTotals,
+                backgroundColor: 'rgba(99, 102, 241, 0.75)',
+                borderColor: '#6366f1',
+                borderWidth: 2,
+                borderRadius: 6,
+                hoverBackgroundColor: 'rgba(99, 102, 241, 0.95)'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return 'Pendapatan: Rp ' + Number(context.raw).toLocaleString('id-ID');
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                    ticks: {
+                        color: '#9ca3af',
+                        callback: function(val) {
+                            if (val >= 1000000) return (val / 1000000) + ' Jt';
+                            if (val >= 1000) return (val / 1000) + ' Rb';
+                            return val;
+                        }
+                    }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { color: '#9ca3af' }
+                }
+            }
+        }
+    });
+}
+
+// Chart 2: Type Composition Donut
+function renderTypeDonutChart(typeCounts) {
+    const canvas = document.getElementById('chart-type-donut');
+    if (!canvas || typeof Chart === 'undefined') return;
+
+    if (typeChart) {
+        typeChart.destroy();
+    }
+
+    const ctx = canvas.getContext('2d');
+    typeChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Invoice Reguler', 'Invoice Sewa'],
+            datasets: [{
+                data: [typeCounts.normal, typeCounts.rental],
+                backgroundColor: ['#6366f1', '#ec4899'],
+                borderColor: 'var(--surface)',
+                borderWidth: 3
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: { color: '#9ca3af', font: { size: 12 } }
+                }
+            },
+            cutout: '70%'
+        }
+    });
+}
+
+// Chart 3: Payment Status Donut
+function renderPaymentDonutChart(paymentCounts) {
+    const canvas = document.getElementById('chart-payment-donut');
+    if (!canvas || typeof Chart === 'undefined') return;
+
+    if (paymentChart) {
+        paymentChart.destroy();
+    }
+
+    const ctx = canvas.getContext('2d');
+    paymentChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Lunas (Paid)', 'Menunggu (Pending)', 'Jatuh Tempo (Overdue)'],
+            datasets: [{
+                data: [paymentCounts.paid, paymentCounts.pending, paymentCounts.overdue],
+                backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+                borderColor: 'var(--surface)',
+                borderWidth: 3
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: { color: '#9ca3af', font: { size: 12 } }
+                }
+            },
+            cutout: '70%'
+        }
+    });
+}
+
+// List 1: Top 5 Active Clients
+function renderTopClientsList(clientTotals) {
+    const container = document.getElementById('analytics-top-clients');
+    if (!container) return;
+
+    const sortedClients = Object.entries(clientTotals)
+        .map(([name, data]) => ({ name, total: data.total, count: data.count }))
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 5);
+
+    if (sortedClients.length === 0) {
+        container.innerHTML = '<div class="empty-analytics text-muted">Belum ada data pelanggan</div>';
+        return;
+    }
+
+    const maxTotal = sortedClients[0].total || 1;
+
+    container.innerHTML = sortedClients.map((client, idx) => {
+        const pct = Math.round((client.total / maxTotal) * 100);
+        return `
+            <div class="top-client-item">
+                <div class="top-client-rank rank-${idx + 1}">${idx + 1}</div>
+                <div class="top-client-info">
+                    <div class="top-client-name" title="${client.name}">${client.name}</div>
+                    <div class="top-client-bar-bg">
+                        <div class="top-client-bar-fill" style="width: ${pct}%;"></div>
+                    </div>
+                </div>
+                <div class="top-client-meta">
+                    <div class="top-client-amount">Rp ${client.total.toLocaleString('id-ID')}</div>
+                    <div class="top-client-count">${client.count} Invoice</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// List 2: New Clients (30 days)
+function renderNewClientsList(newClients) {
+    const container = document.getElementById('analytics-new-clients');
+    if (!container) return;
+
+    if (newClients.length === 0) {
+        container.innerHTML = '<div class="empty-analytics text-muted"><i class="fa-solid fa-user-check"></i> Tidak ada pelanggan baru dalam 30 hari terakhir.</div>';
+        return;
+    }
+
+    container.innerHTML = newClients.map(c => `
+        <div class="new-client-item">
+            <div class="new-client-details">
+                <span class="badge-new-client">BARU</span>
+                <div>
+                    <div class="new-client-name">${c.name}</div>
+                    <div class="new-client-date"><i class="fa-solid fa-clock-rotate-left"></i> Bergabung: ${c.date.toLocaleDateString('id-ID')}</div>
+                </div>
+            </div>
+            <div class="top-client-amount" style="font-size:12px;">
+                Rp ${c.amount.toLocaleString('id-ID')}
+            </div>
+        </div>
+    `).join('');
 }
 
