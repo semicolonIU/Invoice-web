@@ -835,11 +835,43 @@ document.getElementById('invoice-form').addEventListener('submit', async (e) => 
 
         if (editingId) {
             await API.updateInvoice(editingId, invoiceData);
-            alert('Sukses: Invoice berhasil diperbarui!');
         } else {
             await API.createInvoice(invoiceData);
-            alert('Sukses: Invoice berhasil direkam!');
         }
+
+        // Fitur Google Calendar via Webhook Make.com (Otomatis di Background)
+        try {
+            const noteObj = invoiceData.note ? JSON.parse(invoiceData.note) : null;
+            if (noteObj && noteObj.type === 'rental' && noteObj.rental && noteObj.rental.awal && noteObj.rental.akhir) {
+                const cName = Array.isArray(invoiceData.clientName) ? invoiceData.clientName[0] : invoiceData.clientName;
+                
+                // --- PENTING: GANTI URL DI BAWAH INI DENGAN WEBHOOK MAKE.COM ANDA ---
+                const MAKE_WEBHOOK_URL = 'https://hook.eu1.make.com/7hi6l7tvede93y853hslvlax68omzcjk';
+                const updateUrl = `${window.location.origin}/?edit=${invoiceData.$id}`;
+                const newRentalUrl = `${window.location.origin}/?new=rental`;
+                
+                // Hanya kirim jika URL sudah diisi oleh pengguna
+                if (!MAKE_WEBHOOK_URL.includes('xxxxxxxx')) {
+                    // Kirim data secara diam-diam di background (tanpa popup)
+                    fetch(MAKE_WEBHOOK_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            invoiceNo: invoiceData.NoInvoice,
+                            clientName: cName,
+                            awal: noteObj.rental.awal,
+                            akhir: noteObj.rental.akhir,
+                            title: `PENGINGAT: Berakhirnya Sewa PBM - ${cName}`,
+                            description: `Detail Penyewaan:\n- Nama Klien: ${cName}\n- No. Invoice: ${invoiceData.NoInvoice}\n- Periode: ${noteObj.rental.awal} s/d ${noteObj.rental.akhir}\n\nPengingat:\nMasa sewa untuk invoice ini akan segera berakhir. Harap hubungi klien untuk konfirmasi perpanjangan atau pengembalian barang.\n\n🔗 Perbarui Invoice Ini:\n${updateUrl}\n\n🆕 Buat Invoice Sewa Bulan Baru:\n${newRentalUrl}`
+                        })
+                    }).catch(err => console.error('Gagal memanggil webhook:', err));
+                }
+            }
+        } catch (e) {
+            console.error("Gagal memproses Webhook", e);
+        }
+
+        alert(editingId ? 'Sukses: Invoice berhasil diperbarui!' : 'Sukses: Invoice berhasil direkam!');
 
         editingId = null;
         statsData = []; // Reset stats cache to force reload
@@ -1233,14 +1265,29 @@ window.handleLogout = async function() {
     }
 };
 
-function initAndLoad() {
+async function initAndLoad() {
     // Sesuaikan label tombol pratinjau berdasarkan perangkat
     const labelEl = document.getElementById('preview-btn-label');
     if (labelEl && isMobileDevice()) {
         labelEl.textContent = 'Buka PDF';
     }
-    loadInvoices(1);
+
+    // Deep-link handling dari Google Calendar (Make.com webhook)
+    const urlParams = new URLSearchParams(window.location.search);
+    const newType = urlParams.get('new');
+
+    if (newType === 'rental') {
+        // Bersihkan URL agar bersih
+        history.replaceState({}, '', window.location.pathname);
+        // Load data terlebih dahulu, lalu langsung buka form sewa baru
+        await loadInvoices(1);
+        showCreate('rental');
+    } else {
+        loadInvoices(1);
+    }
 }
+
+
 
 // Boot up
 window.addEventListener('DOMContentLoaded', async () => {
