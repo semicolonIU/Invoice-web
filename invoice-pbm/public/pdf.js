@@ -107,7 +107,7 @@ window.generatePDF = async function (invoiceData, action = 'download') {
     const invDate = (flags.showDate !== false && invoiceData.date) ? new Date(invoiceData.date).toLocaleDateString('id-ID') : '';
 
     // RENDER PAGE FUNCTION
-    const renderPage = (pageType) => {
+    const renderPage = async (pageType) => {
         // ================================================
         // HEADER
         // ================================================
@@ -480,12 +480,12 @@ window.generatePDF = async function (invoiceData, action = 'download') {
     };
 
     // 1. Render Lembar Invoice (Utama)
-    renderPage('INVOICE');
+    await renderPage('INVOICE');
 
     // 2. Jika Sewa, Render Lembar Serah Terima
     if (isRental) {
         doc.addPage();
-        renderPage('SERAH TERIMA');
+        await renderPage('SERAH TERIMA');
     }
 
     // ================================================

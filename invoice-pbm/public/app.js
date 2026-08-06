@@ -1085,18 +1085,29 @@ window.updatePaymentStatus = async function(id, newStatus) {
     }
 }
 
-window.downloadPDF = function(id) {
-    const invoice = currentInvoices.find(inv => inv.$id === id);
+window.downloadPDF = async function(id) {
+    const invoice = currentInvoices.find(inv => inv.$id === id) || 
+                    statsData.find(inv => inv.$id === id) || 
+                    (searchFilteredData && searchFilteredData.find(inv => inv.$id === id));
     if(invoice) {
-        window.generatePDF(invoice, 'download');
-        if (invoice.paymentStatus === 'pending') {
-            updatePaymentStatus(id, 'paid');
+        try {
+            await window.generatePDF(invoice, 'download');
+            if (invoice.paymentStatus === 'pending') {
+                updatePaymentStatus(id, 'paid');
+            }
+        } catch (e) {
+            console.error("Download PDF Error:", e);
+            alert("Gagal mengunduh PDF: " + e.message);
         }
+    } else {
+        alert("Data invoice tidak ditemukan.");
     }
 }
 
 window.nativeShare = async function(id) {
-    const invoice = currentInvoices.find(inv => inv.$id === id);
+    const invoice = currentInvoices.find(inv => inv.$id === id) || 
+                    statsData.find(inv => inv.$id === id) || 
+                    (searchFilteredData && searchFilteredData.find(inv => inv.$id === id));
     if(!invoice) return;
     
     try {
@@ -1115,7 +1126,7 @@ window.nativeShare = async function(id) {
             }
         } else {
             alert('Browser/Ponsel Anda tidak memiliki dukungan membagikan file PDF secara langsung. Membuka opsi Download...');
-            window.generatePDF(invoice, 'download');
+            await window.generatePDF(invoice, 'download');
         }
     } catch (e) {
         if (e.name !== 'AbortError') {
@@ -1176,11 +1187,11 @@ window.closePreview = function() {
     modal.style.display = 'none';
 }
 
-window.downloadPreview = function() {
+window.downloadPreview = async function() {
     const iframe = document.getElementById('preview-iframe');
     if (iframe.src.startsWith('blob:')) {
         const data = getInvoiceFormData();
-        window.generatePDF(data, 'download'); // Trigger actual download
+        await window.generatePDF(data, 'download'); // Trigger actual download
     }
 }
 
