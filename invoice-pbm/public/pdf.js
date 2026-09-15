@@ -1,18 +1,38 @@
-// Helper: load image as base64 for jsPDF
+// Helper: load image as base64 for jsPDF (Fail-safe with timeout)
 function loadImageAsBase64(url) {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
+        if (!url) return resolve(null);
+        let settled = false;
+        const safeResolve = (res) => {
+            if (!settled) {
+                settled = true;
+                resolve(res);
+            }
+        };
+
+        // 1.5s timeout safeguard so PDF rendering never hangs
+        setTimeout(() => safeResolve(null), 1500);
+
         const img = new Image();
         img.crossOrigin = 'Anonymous';
         img.onload = function () {
-            const canvas = document.createElement('canvas');
-            canvas.width = img.width;
-            canvas.height = img.height;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0);
-            resolve(canvas.toDataURL('image/png'));
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width || 200;
+                canvas.height = img.height || 100;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                safeResolve(canvas.toDataURL('image/png'));
+            } catch (e) {
+                console.warn('Gagal men-convert logo ke base64:', e);
+                safeResolve(null);
+            }
         };
-        img.onerror = () => reject(new Error('Gagal memuat logo'));
-        img.src = url + '?t=' + Date.now();
+        img.onerror = function () {
+            console.warn('Gagal memuat image logo dari URL:', url);
+            safeResolve(null);
+        };
+        img.src = url;
     });
 }
 

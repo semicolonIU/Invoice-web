@@ -106,34 +106,77 @@
             </header>
 
             <div id="view-dashboard" class="view-section active">
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-icon"><i class="fa-solid fa-calendar-check"></i></div>
+                <!-- 4 KPI Summary Cards Grid -->
+                <div class="stats-grid dashboard-kpi-grid">
+                    <div class="stat-card kpi-card-enhanced">
+                        <div class="kpi-card-accent bg-indigo"></div>
+                        <div class="stat-icon kpi-icon-blue"><i class="fa-solid fa-calendar-day"></i></div>
                         <div class="stat-info">
                             <span class="stat-label">Bulan Ini</span>
                             <h4 id="stat-month-total">Rp 0</h4>
-                            <p id="stat-month-count">0 Invoice</p>
+                            <p id="stat-month-count" class="kpi-subtext">0 Invoice</p>
                         </div>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-icon overall"><i class="fa-solid fa-wallet"></i></div>
+                    <div class="stat-card kpi-card-enhanced">
+                        <div class="kpi-card-accent bg-emerald"></div>
+                        <div class="stat-icon kpi-icon-green"><i class="fa-solid fa-wallet"></i></div>
                         <div class="stat-info">
                             <span class="stat-label">Keseluruhan</span>
                             <h4 id="stat-all-total">Rp 0</h4>
-                            <p id="stat-all-count">0 Invoice</p>
+                            <p id="stat-all-count" class="kpi-subtext">0 Invoice</p>
+                        </div>
+                    </div>
+                    <div class="stat-card kpi-card-enhanced">
+                        <div class="kpi-card-accent bg-teal"></div>
+                        <div class="stat-icon kpi-icon-teal"><i class="fa-solid fa-circle-check"></i></div>
+                        <div class="stat-info">
+                            <span class="stat-label">Terbayar (Lunas)</span>
+                            <h4 id="stat-paid-total">Rp 0</h4>
+                            <p id="stat-paid-count" class="kpi-subtext">0 Invoice</p>
+                        </div>
+                    </div>
+                    <div class="stat-card kpi-card-enhanced">
+                        <div class="kpi-card-accent bg-amber"></div>
+                        <div class="stat-icon kpi-icon-orange"><i class="fa-solid fa-clock-rotate-left"></i></div>
+                        <div class="stat-info">
+                            <span class="stat-label">Piutang (Pending)</span>
+                            <h4 id="stat-pending-total">Rp 0</h4>
+                            <p id="stat-pending-count" class="kpi-subtext">0 Invoice</p>
                         </div>
                     </div>
                 </div>
 
+                <!-- Quick Business Analytics Banner -->
+                <div class="dashboard-analytics-quickbanner">
+                    <div class="quickbanner-left">
+                        <div class="quickbanner-icon"><i class="fa-solid fa-chart-pie"></i></div>
+                        <div>
+                            <h4>Analitik Bisnis & Laporan Rekap PDF</h4>
+                            <p>Lihat grafik tren omset bulanan, komposisi sewa/reguler, dan unduh laporan rekapitulasi PDF resmi PT Putra Banua Mandiri.</p>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary btn-analytics-shortcut" onclick="switchView('analytics'); renderAnalyticsDashboard();">
+                        <i class="fa-solid fa-chart-line"></i> Buka Analitik Bisnis <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+                </div>
+
+                <!-- Controls & Action Buttons Bar -->
                 <div class="controls-bar">
                     <div class="search-sort-group">
                         <div class="search-box">
                             <i class="fa-solid fa-magnifying-glass"></i>
-                            <input type="text" id="search-input" placeholder="Cari klien atau nomor..." oninput="filterInvoices()">
+                            <input type="text" id="search-input" placeholder="Cari nama klien, no invoice, atau PO..." oninput="filterInvoices()">
                             <button id="search-clear-btn" onclick="clearSearch()" title="Hapus pencarian" style="display:none;">&times;</button>
                         </div>
                     </div>
-                    <button class="btn btn-primary" onclick="showCreate('normal')"><i class="fa-solid fa-plus"></i> Invoice Baru</button>
+                    <div class="controls-actions">
+                        <button class="btn btn-secondary btn-nav-analytics" onclick="switchView('analytics'); renderAnalyticsDashboard();">
+                            <i class="fa-solid fa-chart-line text-indigo"></i> Analitik Bisnis
+                        </button>
+                        <button class="btn btn-primary" onclick="showCreate('normal')">
+                            <i class="fa-solid fa-plus"></i> Invoice Baru
+                        </button>
+                    </div>
                 </div>
                 
                 <div class="filter-pill-group">
@@ -158,7 +201,7 @@
                         <tbody id="invoice-list">
                             <tr><td colspan="7" class="text-center loading-text">Memuat data...</td></tr>
                         </tbody>
-                        </table>
+                    </table>
                 </div>
                 <div class="pagination-container" id="pagination-controls">
                     <button class="btn btn-outline btn-sm" id="prev-btn" onclick="changePage(-1)"><i class="fa-solid fa-chevron-left"></i> Prev</button>
@@ -172,84 +215,128 @@
 
             <!-- View Analytics & Kesehatan Bisnis -->
             <div id="view-analytics" class="view-section" style="display:none;">
-                <div class="analytics-header">
-                    <div>
-                        <h2><i class="fa-solid fa-heart-pulse text-indigo"></i> Dashboard Kesehatan Bisnis</h2>
-                        <p class="text-muted">Analisis tren performa keuangan, demografi pelanggan, dan distribusi tagihan</p>
+                <!-- Company Header Banner -->
+                <div class="analytics-banner">
+                    <div class="analytics-brand-left">
+                        <img src="./logo.png" alt="PT PUTRA BANUA MANDIRI" class="analytics-company-logo" />
+                        <div>
+                            <div class="analytics-company-title">PT PUTRA BANUA MANDIRI</div>
+                            <h2><i class="fa-solid fa-chart-line text-indigo"></i> Analitik & Laporan Keuangan</h2>
+                            <p class="analytics-subtitle">Ringkasan kesehatan bisnis, estimasi arus kas, dan laporan performa piutang</p>
+                        </div>
                     </div>
-                    <div class="analytics-filter-range">
-                        <button class="analytics-range-btn" onclick="setAnalyticsRange(3)">3 Bulan</button>
-                        <button class="analytics-range-btn active" onclick="setAnalyticsRange(6)">6 Bulan</button>
-                        <button class="analytics-range-btn" onclick="setAnalyticsRange(12)">12 Bulan</button>
+                    <div class="analytics-actions-right">
+                        <div class="analytics-filter-range" role="group" aria-label="Filter Periode">
+                            <button class="analytics-range-btn" onclick="setAnalyticsRange(3)">3 Bulan</button>
+                            <button class="analytics-range-btn active" onclick="setAnalyticsRange(6)">6 Bulan</button>
+                            <button class="analytics-range-btn" onclick="setAnalyticsRange(12)">12 Bulan</button>
+                            <button class="analytics-range-btn" onclick="setAnalyticsRange(0)">Semua</button>
+                        </div>
+                        <button class="btn btn-primary btn-rekap-pdf" onclick="downloadAnalyticsPDF()">
+                            <i class="fa-solid fa-file-pdf"></i> Download Rekap PDF
+                        </button>
                     </div>
                 </div>
 
-                <!-- KPI Cards -->
-                <div class="stats-grid analytics-kpi-grid">
-                    <div class="stat-card kpi-card">
-                        <div class="stat-icon kpi-icon-blue"><i class="fa-solid fa-coins"></i></div>
+                <!-- KPI Cards (6 Grid Layout) -->
+                <div class="analytics-kpi-grid-6">
+                    <!-- 1. Total Pendapatan -->
+                    <div class="stat-card kpi-card kpi-card-enhanced">
+                        <div class="kpi-card-accent bg-indigo"></div>
+                        <div class="stat-icon kpi-icon-blue"><i class="fa-solid fa-wallet"></i></div>
                         <div class="stat-info">
-                            <span class="stat-label">Total Pendapatan (YTD)</span>
+                            <span class="stat-label">Total Omset (Periode)</span>
                             <h4 id="analytics-kpi-ytd">Rp 0</h4>
-                            <span id="analytics-kpi-ytd-change" class="kpi-change neutral"><i class="fa-solid fa-minus"></i> 0% vs bln lalu</span>
+                            <span id="analytics-kpi-ytd-change" class="kpi-change neutral"><i class="fa-solid fa-minus"></i> 0% vs sblmnya</span>
                         </div>
                     </div>
-                    <div class="stat-card kpi-card">
-                        <div class="stat-icon kpi-icon-green"><i class="fa-solid fa-calendar-day"></i></div>
+
+                    <!-- 2. Pendapatan Bulan Ini -->
+                    <div class="stat-card kpi-card kpi-card-enhanced">
+                        <div class="kpi-card-accent bg-emerald"></div>
+                        <div class="stat-icon kpi-icon-green"><i class="fa-solid fa-calendar-check"></i></div>
                         <div class="stat-info">
-                            <span class="stat-label">Pendapatan Bulan Ini</span>
+                            <span class="stat-label">Bulan Ini</span>
                             <h4 id="analytics-kpi-month">Rp 0</h4>
                             <span id="analytics-kpi-month-change" class="kpi-change neutral"><i class="fa-solid fa-minus"></i> 0% vs bln lalu</span>
                         </div>
                     </div>
-                    <div class="stat-card kpi-card">
-                        <div class="stat-icon kpi-icon-purple"><i class="fa-solid fa-circle-check"></i></div>
+
+                    <!-- 3. Total Lunas (Paid) -->
+                    <div class="stat-card kpi-card kpi-card-enhanced">
+                        <div class="kpi-card-accent bg-teal"></div>
+                        <div class="stat-icon kpi-icon-teal"><i class="fa-solid fa-circle-check"></i></div>
                         <div class="stat-info">
-                            <span class="stat-label">Tingkat Lunas (Paid)</span>
-                            <h4 id="analytics-kpi-paid-rate">0%</h4>
-                            <span id="analytics-kpi-paid-count" class="kpi-subtext">0 dari 0 invoice</span>
+                            <span class="stat-label">Terbayar (Lunas)</span>
+                            <h4 id="analytics-kpi-total-paid">Rp 0</h4>
+                            <span id="analytics-kpi-paid-count" class="kpi-subtext">0 invoice lunas</span>
                         </div>
                     </div>
-                    <div class="stat-card kpi-card">
-                        <div class="stat-icon kpi-icon-orange"><i class="fa-solid fa-users-gear"></i></div>
+
+                    <!-- 4. Sisa Piutang / Pending -->
+                    <div class="stat-card kpi-card kpi-card-enhanced">
+                        <div class="kpi-card-accent bg-amber"></div>
+                        <div class="stat-icon kpi-icon-orange"><i class="fa-solid fa-clock-rotate-left"></i></div>
                         <div class="stat-info">
-                            <span class="stat-label">Pelanggan Aktif</span>
+                            <span class="stat-label">Belum Lunas (Piutang)</span>
+                            <h4 id="analytics-kpi-total-pending">Rp 0</h4>
+                            <span id="analytics-kpi-pending-count" class="kpi-subtext">0 invoice pending</span>
+                        </div>
+                    </div>
+
+                    <!-- 5. Tingkat Lunas (Paid Rate %) -->
+                    <div class="stat-card kpi-card kpi-card-enhanced">
+                        <div class="kpi-card-accent bg-purple"></div>
+                        <div class="stat-icon kpi-icon-purple"><i class="fa-solid fa-chart-pie"></i></div>
+                        <div class="stat-info">
+                            <span class="stat-label">Collection Rate</span>
+                            <h4 id="analytics-kpi-paid-rate">0%</h4>
+                            <span id="analytics-kpi-overdue-count" class="kpi-subtext">0 invoice jatuh tempo</span>
+                        </div>
+                    </div>
+
+                    <!-- 6. Pelanggan Aktif -->
+                    <div class="stat-card kpi-card kpi-card-enhanced">
+                        <div class="kpi-card-accent bg-cyan"></div>
+                        <div class="stat-icon kpi-icon-cyan"><i class="fa-solid fa-users"></i></div>
+                        <div class="stat-info">
+                            <span class="stat-label">Total Pelanggan</span>
                             <h4 id="analytics-kpi-active-clients">0</h4>
                             <span id="analytics-kpi-new-clients-count" class="kpi-subtext">0 pelanggan baru (30hr)</span>
                         </div>
                     </div>
                 </div>
 
-                <!-- Charts Row 1: Tren Pendapatan -->
+                <!-- Charts Row 1: Tren Pendapatan Bulanan -->
                 <div class="analytics-row">
                     <div class="chart-card full-width">
                         <div class="chart-card-header">
                             <div>
-                                <h3><i class="fa-solid fa-chart-column text-indigo"></i> Tren Pendapatan Bulanan</h3>
-                                <p class="chart-subtitle">Ringkasan estimasi arus kas masuk berdasarkan invoice yang diterbitkan</p>
+                                <h3><i class="fa-solid fa-chart-column text-indigo"></i> Grafik Tren Pendapatan & Piutang</h3>
+                                <p class="chart-subtitle">Perbandingan nominal lunas vs pending per bulan</p>
                             </div>
                         </div>
-                        <div class="chart-body" style="height: 300px; position: relative;">
+                        <div class="chart-body" style="height: 320px; position: relative;">
                             <canvas id="chart-revenue-trend"></canvas>
                         </div>
                     </div>
                 </div>
 
-                <!-- Charts Row 2: Donut Charts (Komposisi Tipe & Status) -->
+                <!-- Charts Row 2: Donut Charts -->
                 <div class="analytics-grid-2col">
                     <div class="chart-card">
                         <div class="chart-card-header">
-                            <h3><i class="fa-solid fa-pie-chart text-pink"></i> Tipe Invoice</h3>
+                            <h3><i class="fa-solid fa-pie-chart text-pink"></i> Komposisi Tipe Invoice</h3>
                         </div>
-                        <div class="chart-body" style="height: 240px; position: relative;">
+                        <div class="chart-body" style="height: 250px; position: relative;">
                             <canvas id="chart-type-donut"></canvas>
                         </div>
                     </div>
                     <div class="chart-card">
                         <div class="chart-card-header">
-                            <h3><i class="fa-solid fa-chart-donut text-emerald"></i> Status Pembayaran</h3>
+                            <h3><i class="fa-solid fa-chart-pie text-emerald"></i> Status Pembayaran</h3>
                         </div>
-                        <div class="chart-body" style="height: 240px; position: relative;">
+                        <div class="chart-body" style="height: 250px; position: relative;">
                             <canvas id="chart-payment-donut"></canvas>
                         </div>
                     </div>
@@ -260,7 +347,7 @@
                     <!-- Top 5 Pelanggan -->
                     <div class="chart-card">
                         <div class="chart-card-header">
-                            <h3><i class="fa-solid fa-trophy text-amber"></i> Top 5 Pelanggan Paling Aktif</h3>
+                            <h3><i class="fa-solid fa-trophy text-amber"></i> Top Pelanggan Berdasarkan Transaksi</h3>
                         </div>
                         <div class="top-clients-list" id="analytics-top-clients">
                             <div class="empty-analytics text-muted">Belum ada data pelanggan</div>
@@ -275,6 +362,34 @@
                         <div class="new-clients-list" id="analytics-new-clients">
                             <div class="empty-analytics text-muted">Belum ada pelanggan baru</div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Section Row 4: Tabel Rekapitulasi Bulanan -->
+                <div class="chart-card full-width" style="margin-top: 20px;">
+                    <div class="chart-card-header">
+                        <div>
+                            <h3><i class="fa-solid fa-table-list text-indigo"></i> Rekapitulasi Transaksi per Bulan</h3>
+                            <p class="chart-subtitle">Detail angka pendapatan reguler, sewa, terbayar, dan sisa piutang</p>
+                        </div>
+                    </div>
+                    <div class="table-container" style="box-shadow: none; border: none;">
+                        <table id="analytics-monthly-table">
+                            <thead>
+                                <tr>
+                                    <th>Bulan / Tahun</th>
+                                    <th>Total Tagihan</th>
+                                    <th>Reguler</th>
+                                    <th>Sewa (Rental)</th>
+                                    <th>Nominal Lunas</th>
+                                    <th>Sisa Piutang</th>
+                                    <th>Status Collection</th>
+                                </tr>
+                            </thead>
+                            <tbody id="analytics-monthly-tbody">
+                                <tr><td colspan="7" class="text-center text-muted">Memuat data rekapitulasi...</td></tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>

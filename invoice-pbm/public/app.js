@@ -75,7 +75,7 @@ const ActivityLog = {
     },
 
     /** Tambah log baru — simpan ke localStorage dulu (instant), lalu push ke Appwrite */
-    add(action, label, detail = '') {
+    add(action, label, detail = '', meta = {}) {
         const user = this.getUser();
         const entry = {
             id: Date.now() + Math.random().toString(36).slice(2),
@@ -84,6 +84,8 @@ const ActivityLog = {
             detail,
             user: user.name || user.email || 'Unknown',
             userEmail: user.email || '',
+            invoiceId: meta.invoiceId || '',
+            snapshot:  meta.snapshot  || '',
             ts: Date.now()
         };
 
@@ -100,13 +102,39 @@ const ActivityLog = {
 
         // 2. Push ke Appwrite di background (non-blocking)
         API.addLog({
-            action: entry.action,
-            label:  entry.label,
-            detail: entry.detail || '',
-            user:   entry.user,
+            action:    entry.action,
+            label:     entry.label,
+            detail:    entry.detail || '',
+            user:      entry.user,
             userEmail: entry.userEmail,
-            ts:     entry.ts
+            invoiceId: entry.invoiceId,
+            snapshot:  entry.snapshot,
+            ts:        entry.ts
         }).catch(() => {}); // Abaikan error agar tidak ganggu UI
+    },
+
+    /** Buat snapshot ringkas dari invoice (hanya field penting) */
+    makeSnapshot(invoice) {
+        const FIELDS = ['NoInvoice','clientName','clientAddress','noPo','site','date',
+                        'items','note','tb','bg','totalAmount','paymentStatus'];
+        const snap = {};
+        FIELDS.forEach(f => { if (invoice[f] !== undefined) snap[f] = invoice[f]; });
+        try { return JSON.stringify(snap); } catch { return ''; }
+    },
+
+    /** Pulihkan invoice dari snapshot (untuk delete) */
+    async restore(entry) {
+        if (!entry.snapshot) return;
+        try {
+            const data = JSON.parse(entry.snapshot);
+            // Hapus field sistem Appwrite jika ada
+            delete data.$id; delete data.$collectionId; delete data.$databaseId;
+            await API.createInvoice(data);
+            notify(`Invoice ${data.NoInvoice || ''} berhasil dipulihkan!`, 'success');
+            statsData = []; loadInvoices(currentPage);
+        } catch(e) {
+            notify('Gagal memulihkan invoice: ' + e.message, 'error');
+        }
     },
 
     /** Ambil dari localStorage cache (cepat, untuk badge) */
@@ -266,6 +294,9 @@ const ActivityLog = {
                         <span class="activity-dot">&middot;</span>
                         <span class="activity-time">${this._relativeTime(entry.ts)}</span>
                         <span class="activity-clock">${timeStr}</span>
+                        ${entry.snapshot && entry.action === 'delete_invoice'
+                            ? `<button class="activity-restore-btn" onclick="ActivityLog.restore(${JSON.stringify(entry).replace(/"/g,'&quot;')})" title="Pulihkan invoice ini"><i class="fa-solid fa-rotate-left"></i> Pulihkan</button>`
+                            : ''}
                     </div>
                 </div>
             `;
@@ -1238,6 +1269,7 @@ function renderInvoiceTable(docs) {
 }
 
 function updateStats(docs) {
+    if (!docs) return;
     const now = new Date();
     const thisMonth = now.getMonth();
     const thisYear = now.getFullYear();
@@ -1246,22 +1278,54 @@ function updateStats(docs) {
     let countAll = docs.length;
     let totalMonth = 0;
     let countMonth = 0;
+    let totalPaid = 0;
+    let countPaid = 0;
+    let totalPending = 0;
+    let countPending = 0;
     
     docs.forEach(inv => {
         const amount = Number(inv.totalAmount) || 0;
+        const status = String(inv.paymentStatus || 'pending').toLowerCase();
         totalAll += amount;
         
-        const invDate = new Date(inv.date);
+        const invDate = new Date(inv.date || inv.$createdAt);
         if (invDate.getMonth() === thisMonth && invDate.getFullYear() === thisYear) {
             totalMonth += amount;
             countMonth++;
         }
+
+        if (status === 'paid') {
+            totalPaid += amount;
+            countPaid++;
+        } else {
+            totalPending += amount;
+            countPending++;
+        }
     });
     
-    document.getElementById('stat-month-total').textContent = 'Rp ' + totalMonth.toLocaleString('id-ID');
-    document.getElementById('stat-month-count').textContent = countMonth + ' Invoice';
-    document.getElementById('stat-all-total').textContent = 'Rp ' + totalAll.toLocaleString('id-ID');
-    document.getElementById('stat-all-count').textContent = countAll + ' Invoice';
+    const mTotalEl = document.getElementById('stat-month-total');
+    if (mTotalEl) mTotalEl.textContent = 'Rp ' + totalMonth.toLocaleString('id-ID');
+    
+    const mCountEl = document.getElementById('stat-month-count');
+    if (mCountEl) mCountEl.textContent = countMonth + ' Invoice';
+    
+    const aTotalEl = document.getElementById('stat-all-total');
+    if (aTotalEl) aTotalEl.textContent = 'Rp ' + totalAll.toLocaleString('id-ID');
+    
+    const aCountEl = document.getElementById('stat-all-count');
+    if (aCountEl) aCountEl.textContent = countAll + ' Invoice';
+
+    const pTotalEl = document.getElementById('stat-paid-total');
+    if (pTotalEl) pTotalEl.textContent = 'Rp ' + totalPaid.toLocaleString('id-ID');
+
+    const pCountEl = document.getElementById('stat-paid-count');
+    if (pCountEl) pCountEl.textContent = countPaid + ' Invoice';
+
+    const pendTotalEl = document.getElementById('stat-pending-total');
+    if (pendTotalEl) pendTotalEl.textContent = 'Rp ' + totalPending.toLocaleString('id-ID');
+
+    const pendCountEl = document.getElementById('stat-pending-count');
+    if (pendCountEl) pendCountEl.textContent = countPending + ' Invoice';
 }
 
 // Create Invoice Submit
@@ -1339,7 +1403,11 @@ document.getElementById('invoice-form').addEventListener('submit', async (e) => 
     try {
         const invoiceData = getInvoiceFormData();
 
+        // Ambil snapshot data lama sebelum update (untuk restore)
+        let prevSnapshot = '';
         if (editingId) {
+            const prev = currentInvoices.find(v => v.$id === editingId) || statsData.find(v => v.$id === editingId);
+            if (prev) prevSnapshot = ActivityLog.makeSnapshot(prev);
             await API.updateInvoice(editingId, invoiceData);
         } else {
             await API.createInvoice(invoiceData);
@@ -1380,12 +1448,15 @@ document.getElementById('invoice-form').addEventListener('submit', async (e) => 
         notify(editingId ? 'Invoice berhasil diperbarui!' : 'Invoice berhasil direkam!', 'success');
 
         // Log aktivitas
-        const savedType = editingId ? 'edit_invoice' : 'create_invoice';
-        const savedLabel = editingId
+        const savedType   = editingId ? 'edit_invoice' : 'create_invoice';
+        const savedLabel  = editingId
             ? `Invoice ${invoiceData.NoInvoice} diperbarui`
             : `Invoice ${invoiceData.NoInvoice} dibuat`;
         const savedClient = Array.isArray(invoiceData.clientName) ? invoiceData.clientName[0] : invoiceData.clientName;
-        ActivityLog.add(savedType, savedLabel, `Klien: ${savedClient || '-'} | Total: Rp ${(invoiceData.totalAmount||0).toLocaleString('id-ID')}`);
+        ActivityLog.add(savedType, savedLabel,
+            `Klien: ${savedClient || '-'} | Total: Rp ${(invoiceData.totalAmount||0).toLocaleString('id-ID')}`,
+            { invoiceId: editingId || '', snapshot: prevSnapshot }
+        );
 
         editingId = null;
         statsData = []; // Reset stats cache to force reload
@@ -1612,12 +1683,23 @@ window.createRentalForThisMonth = function(id) {
 }
 
 window.deleteInvoice = async function(id) {
+    const invoice = currentInvoices.find(v => v.$id === id) || statsData.find(v => v.$id === id);
     const confirmed = await showConfirm('Hapus Invoice', 'Data invoice ini akan dihapus secara permanen. Tindakan ini tidak dapat dibatalkan.', { type: 'danger', confirmText: 'Ya, Hapus', icon: 'fa-trash-can' });
-    if(confirmed) {
+    if (confirmed) {
         try {
+            // Ambil snapshot sebelum dihapus
+            const snapshot = invoice ? ActivityLog.makeSnapshot(invoice) : '';
+            const invNo    = invoice ? (invoice.NoInvoice || id) : id;
+            const client   = invoice ? (Array.isArray(invoice.clientName) ? invoice.clientName[0] : invoice.clientName) : '-';
+
             await API.deleteInvoice(id);
             notify('Invoice berhasil dihapus', 'success');
-            ActivityLog.add('delete_invoice', `Invoice dihapus`, `ID: ${id}`);
+            ActivityLog.add(
+                'delete_invoice',
+                `Invoice ${invNo} dihapus`,
+                `Klien: ${client} | Total: Rp ${(invoice?.totalAmount||0).toLocaleString('id-ID')}`,
+                { invoiceId: id, snapshot }
+            );
             statsData = [];
             loadInvoices(currentPage);
         } catch(e) {
@@ -2092,13 +2174,16 @@ window.setAnalyticsRange = function(months) {
     // Update active button state
     document.querySelectorAll('.analytics-range-btn').forEach(btn => {
         btn.classList.remove('active');
-        if (btn.textContent.includes(months + ' Bulan')) {
+        const text = btn.textContent.trim();
+        if (months === 0 && text === 'Semua') {
+            btn.classList.add('active');
+        } else if (months > 0 && text.includes(months + ' Bulan')) {
             btn.classList.add('active');
         }
     });
 
     renderAnalyticsDashboard();
-}
+};
 
 function renderAnalyticsDashboard(docsTarget) {
     const docs = docsTarget || (statsData.length > 0 ? statsData : currentInvoices);
@@ -2108,22 +2193,41 @@ function renderAnalyticsDashboard(docsTarget) {
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth();
 
+    // Filter documents by analyticsRangeMonths if > 0
+    let filteredDocs = docs;
+    if (analyticsRangeMonths > 0) {
+        const cutoffDate = new Date();
+        cutoffDate.setMonth(cutoffDate.getMonth() - analyticsRangeMonths);
+        filteredDocs = docs.filter(inv => {
+            const d = new Date(inv.date || inv.$createdAt);
+            return d >= cutoffDate;
+        });
+    }
+
     // 1. Calculate KPI Metrics
-    let totalYtd = 0;
+    let totalOmset = 0;
     let totalThisMonth = 0;
     let totalLastMonth = 0;
+    let totalPaid = 0;
+    let totalPending = 0;
+    let totalOverdue = 0;
     let paidCount = 0;
+    let pendingCount = 0;
+    let overdueCount = 0;
     
     const clientFirstDates = {}; // clientName -> earliest Date
     const clientTotals = {};     // clientName -> { total: number, count: number }
     const typeCounts = { rental: 0, normal: 0 };
     const paymentCounts = { paid: 0, pending: 0, overdue: 0 };
+    const monthlySummary = {};   // "YYYY-MM" -> { label, total, normal, rental, paid, pending, count }
 
-    docs.forEach(inv => {
+    filteredDocs.forEach(inv => {
         const invDate = new Date(inv.date || inv.$createdAt);
         const amount = Number(inv.totalAmount) || 0;
         const cName = Array.isArray(inv.clientName) ? inv.clientName[0] : (inv.clientName || 'Tidak Diketahui');
         
+        totalOmset += amount;
+
         // Check Type
         let isRental = false;
         try {
@@ -2143,26 +2247,39 @@ function renderAnalyticsDashboard(docsTarget) {
         if (status === 'paid') {
             paymentCounts.paid++;
             paidCount++;
+            totalPaid += amount;
         } else if (status === 'overdue') {
             paymentCounts.overdue++;
+            overdueCount++;
+            totalPending += amount;
+            totalOverdue += amount;
         } else {
             paymentCounts.pending++;
+            pendingCount++;
+            totalPending += amount;
         }
 
-        // YTD & Monthly Totals
-        if (invDate.getFullYear() === currentYear) {
-            totalYtd += amount;
-        }
-
+        // Monthly breakdown
         if (invDate.getFullYear() === currentYear && invDate.getMonth() === currentMonth) {
             totalThisMonth += amount;
         }
-
-        // Last Month calculation for delta
         const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
         if (invDate.getFullYear() === lastMonthDate.getFullYear() && invDate.getMonth() === lastMonthDate.getMonth()) {
             totalLastMonth += amount;
         }
+
+        // Monthly summary map
+        const monthKey = `${invDate.getFullYear()}-${String(invDate.getMonth() + 1).padStart(2, '0')}`;
+        if (!monthlySummary[monthKey]) {
+            const monthLabel = invDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+            monthlySummary[monthKey] = { label: monthLabel, total: 0, normal: 0, rental: 0, paid: 0, pending: 0, count: 0 };
+        }
+        monthlySummary[monthKey].total += amount;
+        monthlySummary[monthKey].count += 1;
+        if (isRental) monthlySummary[monthKey].rental += amount;
+        else monthlySummary[monthKey].normal += amount;
+        if (status === 'paid') monthlySummary[monthKey].paid += amount;
+        else monthlySummary[monthKey].pending += amount;
 
         // Client Aggregation
         if (!clientTotals[cName]) {
@@ -2179,10 +2296,16 @@ function renderAnalyticsDashboard(docsTarget) {
 
     // 2. Render KPI Cards
     const ytdEl = document.getElementById('analytics-kpi-ytd');
-    if (ytdEl) ytdEl.textContent = 'Rp ' + totalYtd.toLocaleString('id-ID');
+    if (ytdEl) ytdEl.textContent = 'Rp ' + totalOmset.toLocaleString('id-ID');
 
     const monthEl = document.getElementById('analytics-kpi-month');
     if (monthEl) monthEl.textContent = 'Rp ' + totalThisMonth.toLocaleString('id-ID');
+
+    const paidEl = document.getElementById('analytics-kpi-total-paid');
+    if (paidEl) paidEl.textContent = 'Rp ' + totalPaid.toLocaleString('id-ID');
+
+    const pendingEl = document.getElementById('analytics-kpi-total-pending');
+    if (pendingEl) pendingEl.textContent = 'Rp ' + totalPending.toLocaleString('id-ID');
 
     // Monthly Delta
     const monthChangeEl = document.getElementById('analytics-kpi-month-change');
@@ -2198,14 +2321,20 @@ function renderAnalyticsDashboard(docsTarget) {
         }
     }
 
-    // Paid Rate
-    const totalDocs = docs.length;
+    // Collection Rate
+    const totalDocs = filteredDocs.length;
     const paidRatePct = totalDocs > 0 ? Math.round((paidCount / totalDocs) * 100) : 0;
     const paidRateEl = document.getElementById('analytics-kpi-paid-rate');
     if (paidRateEl) paidRateEl.textContent = paidRatePct + '%';
     
     const paidCountEl = document.getElementById('analytics-kpi-paid-count');
-    if (paidCountEl) paidCountEl.textContent = `${paidCount} dari ${totalDocs} invoice lunas`;
+    if (paidCountEl) paidCountEl.textContent = `${paidCount} invoice lunas`;
+
+    const pendingCountEl = document.getElementById('analytics-kpi-pending-count');
+    if (pendingCountEl) pendingCountEl.textContent = `${pendingCount + overdueCount} invoice belum terbayar`;
+
+    const overdueCountEl = document.getElementById('analytics-kpi-overdue-count');
+    if (overdueCountEl) overdueCountEl.textContent = `${overdueCount} invoice jatuh tempo`;
 
     // Active Clients & New Clients (30 days)
     const activeClientsCount = Object.keys(clientTotals).length;
@@ -2223,13 +2352,14 @@ function renderAnalyticsDashboard(docsTarget) {
     if (newClientsCountEl) newClientsCountEl.textContent = `${newClients.length} pelanggan baru (30hr)`;
 
     // 3. Render Charts
-    renderRevenueTrendChart(docs, analyticsRangeMonths);
+    renderRevenueTrendChart(filteredDocs, analyticsRangeMonths || 6);
     renderTypeDonutChart(typeCounts);
     renderPaymentDonutChart(paymentCounts);
 
-    // 4. Render Lists (Top Clients & New Clients)
+    // 4. Render Lists & Monthly Breakdown Table
     renderTopClientsList(clientTotals);
     renderNewClientsList(newClients);
+    renderMonthlyBreakdownTable(monthlySummary);
 }
 
 // Chart 1: Revenue Trend Bar Chart
@@ -2239,7 +2369,8 @@ function renderRevenueTrendChart(docs, monthsToShow = 6) {
 
     const now = new Date();
     const monthLabels = [];
-    const monthlyTotals = Array(monthsToShow).fill(0);
+    const monthlyPaid = Array(monthsToShow).fill(0);
+    const monthlyPending = Array(monthsToShow).fill(0);
 
     for (let i = monthsToShow - 1; i >= 0; i--) {
         const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -2249,11 +2380,16 @@ function renderRevenueTrendChart(docs, monthsToShow = 6) {
     docs.forEach(inv => {
         const invDate = new Date(inv.date || inv.$createdAt);
         const amount = Number(inv.totalAmount) || 0;
+        const status = (inv.paymentStatus || 'pending').toLowerCase();
 
         for (let i = 0; i < monthsToShow; i++) {
             const targetDate = new Date(now.getFullYear(), now.getMonth() - (monthsToShow - 1 - i), 1);
             if (invDate.getFullYear() === targetDate.getFullYear() && invDate.getMonth() === targetDate.getMonth()) {
-                monthlyTotals[i] += amount;
+                if (status === 'paid') {
+                    monthlyPaid[i] += amount;
+                } else {
+                    monthlyPending[i] += amount;
+                }
                 break;
             }
         }
@@ -2268,25 +2404,35 @@ function renderRevenueTrendChart(docs, monthsToShow = 6) {
         type: 'bar',
         data: {
             labels: monthLabels,
-            datasets: [{
-                label: 'Pendapatan (Rp)',
-                data: monthlyTotals,
-                backgroundColor: 'rgba(99, 102, 241, 0.75)',
-                borderColor: '#6366f1',
-                borderWidth: 2,
-                borderRadius: 6,
-                hoverBackgroundColor: 'rgba(99, 102, 241, 0.95)'
-            }]
+            datasets: [
+                {
+                    label: 'Nominal Lunas (Rp)',
+                    data: monthlyPaid,
+                    backgroundColor: '#10b981',
+                    borderRadius: 6,
+                    hoverBackgroundColor: '#059669'
+                },
+                {
+                    label: 'Nominal Pending (Rp)',
+                    data: monthlyPending,
+                    backgroundColor: '#f59e0b',
+                    borderRadius: 6,
+                    hoverBackgroundColor: '#d97706'
+                }
+            ]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { display: false },
+                legend: {
+                    position: 'top',
+                    labels: { color: '#64748b', font: { size: 12, weight: '600' } }
+                },
                 tooltip: {
                     callbacks: {
                         label: function(context) {
-                            return 'Pendapatan: Rp ' + Number(context.raw).toLocaleString('id-ID');
+                            return `${context.dataset.label}: Rp ${Number(context.raw).toLocaleString('id-ID')}`;
                         }
                     }
                 }
@@ -2294,9 +2440,9 @@ function renderRevenueTrendChart(docs, monthsToShow = 6) {
             scales: {
                 y: {
                     beginAtZero: true,
-                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                    grid: { color: 'rgba(226, 232, 240, 0.8)' },
                     ticks: {
-                        color: '#9ca3af',
+                        color: '#64748b',
                         callback: function(val) {
                             if (val >= 1000000) return (val / 1000000) + ' Jt';
                             if (val >= 1000) return (val / 1000) + ' Rb';
@@ -2306,7 +2452,7 @@ function renderRevenueTrendChart(docs, monthsToShow = 6) {
                 },
                 x: {
                     grid: { display: false },
-                    ticks: { color: '#9ca3af' }
+                    ticks: { color: '#64748b' }
                 }
             }
         }
@@ -2326,11 +2472,11 @@ function renderTypeDonutChart(typeCounts) {
     typeChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: ['Invoice Reguler', 'Invoice Sewa'],
+            labels: ['Invoice Reguler', 'Invoice Sewa (Rental)'],
             datasets: [{
                 data: [typeCounts.normal, typeCounts.rental],
-                backgroundColor: ['#6366f1', '#ec4899'],
-                borderColor: 'var(--surface)',
+                backgroundColor: ['#4f46e5', '#ec4899'],
+                borderColor: '#ffffff',
                 borderWidth: 3
             }]
         },
@@ -2340,10 +2486,10 @@ function renderTypeDonutChart(typeCounts) {
             plugins: {
                 legend: {
                     position: 'bottom',
-                    labels: { color: '#9ca3af', font: { size: 12 } }
+                    labels: { color: '#64748b', font: { size: 12, weight: '500' } }
                 }
             },
-            cutout: '70%'
+            cutout: '68%'
         }
     });
 }
@@ -2365,7 +2511,7 @@ function renderPaymentDonutChart(paymentCounts) {
             datasets: [{
                 data: [paymentCounts.paid, paymentCounts.pending, paymentCounts.overdue],
                 backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
-                borderColor: 'var(--surface)',
+                borderColor: '#ffffff',
                 borderWidth: 3
             }]
         },
@@ -2375,10 +2521,10 @@ function renderPaymentDonutChart(paymentCounts) {
             plugins: {
                 legend: {
                     position: 'bottom',
-                    labels: { color: '#9ca3af', font: { size: 12 } }
+                    labels: { color: '#64748b', font: { size: 12, weight: '500' } }
                 }
             },
-            cutout: '70%'
+            cutout: '68%'
         }
     });
 }
@@ -2445,4 +2591,267 @@ function renderNewClientsList(newClients) {
         </div>
     `).join('');
 }
+
+// Section 5: Monthly Rekapitulasi Table
+function renderMonthlyBreakdownTable(monthlySummary) {
+    const tbody = document.getElementById('analytics-monthly-tbody');
+    if (!tbody) return;
+
+    const keys = Object.keys(monthlySummary).sort().reverse();
+    if (keys.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Belum ada transaksi dalam periode ini</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = keys.map(key => {
+        const item = monthlySummary[key];
+        const rate = item.total > 0 ? Math.round((item.paid / item.total) * 100) : 0;
+        let badgeClass = 'badge-reguler';
+        if (rate >= 80) badgeClass = 'badge-success';
+        else if (rate >= 50) badgeClass = 'badge-warning';
+        else badgeClass = 'badge-sewa';
+
+        return `
+            <tr>
+                <td><strong>${item.label}</strong></td>
+                <td><strong>Rp ${item.total.toLocaleString('id-ID')}</strong> <small class="text-muted">(${item.count})</small></td>
+                <td>Rp ${item.normal.toLocaleString('id-ID')}</td>
+                <td>Rp ${item.rental.toLocaleString('id-ID')}</td>
+                <td style="color:#059669; font-weight:600;">Rp ${item.paid.toLocaleString('id-ID')}</td>
+                <td style="color:#dc2626; font-weight:600;">Rp ${item.pending.toLocaleString('id-ID')}</td>
+                <td><span class="badge ${badgeClass}">${rate}% Lunas</span></td>
+            </tr>
+        `;
+    }).join('');
+}
+
+// Download Summary Rekap as PDF
+window.downloadAnalyticsPDF = async function() {
+    console.log('Menjalankan downloadAnalyticsPDF...');
+
+    const jsPDFClass = (window.jspdf && window.jspdf.jsPDF) ? window.jspdf.jsPDF : (window.jsPDF || null);
+    if (!jsPDFClass) {
+        showToast('Library jsPDF belum terdistribusi. Silakan refresh halaman.', 'error');
+        return;
+    }
+
+    showToast('Menyiapkan Laporan Rekap PDF...', 'info');
+
+    try {
+        const doc = new jsPDFClass({ unit: 'mm', format: 'a4', compress: true });
+
+        const docs = (typeof statsData !== 'undefined' && statsData.length > 0) ? statsData : (typeof currentInvoices !== 'undefined' ? currentInvoices : []);
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+
+        // Load logo with fast timeout safeguard
+        let logoBase64 = null;
+        try {
+            logoBase64 = await loadImageAsBase64('./logo.png');
+        } catch(e) {}
+
+        // Calculate Stats
+        let totalOmset = 0;
+        let totalPaid = 0;
+        let totalPending = 0;
+        let paidCount = 0;
+        let pendingCount = 0;
+        let rentalCount = 0;
+        let normalCount = 0;
+        const clientTotals = {};
+        const monthlySummary = {};
+
+        docs.forEach(inv => {
+            const amount = Number(inv.totalAmount) || 0;
+            const status = String(inv.paymentStatus || 'pending').toLowerCase();
+            const invDate = new Date(inv.date || inv.$createdAt || Date.now());
+            const cName = Array.isArray(inv.clientName) ? inv.clientName[0] : (inv.clientName || 'Tidak Diketahui');
+
+            totalOmset += amount;
+
+            let isRental = false;
+            try {
+                const data = typeof inv.items === 'string' ? JSON.parse(inv.items) : inv.items;
+                const noteData = inv.note ? (typeof inv.note === 'string' ? JSON.parse(inv.note) : inv.note) : null;
+                isRental = (noteData && noteData.type === 'rental') || (data && data.type === 'rental') || (inv.NoInvoice && String(inv.NoInvoice).toUpperCase().startsWith('SW'));
+            } catch(e) {}
+
+            if (isRental) rentalCount++;
+            else normalCount++;
+
+            if (status === 'paid') {
+                totalPaid += amount;
+                paidCount++;
+            } else {
+                totalPending += amount;
+                pendingCount++;
+            }
+
+            if (!clientTotals[cName]) clientTotals[cName] = { total: 0, count: 0 };
+            clientTotals[cName].total += amount;
+            clientTotals[cName].count += 1;
+
+            const monthKey = `${invDate.getFullYear()}-${String(invDate.getMonth() + 1).padStart(2, '0')}`;
+            if (!monthlySummary[monthKey]) {
+                monthlySummary[monthKey] = {
+                    label: invDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }),
+                    total: 0, paid: 0, pending: 0, count: 0
+                };
+            }
+            monthlySummary[monthKey].total += amount;
+            monthlySummary[monthKey].count += 1;
+            if (status === 'paid') monthlySummary[monthKey].paid += amount;
+            else monthlySummary[monthKey].pending += amount;
+        });
+
+        // 1. Header Banner PDF
+        if (logoBase64) {
+            try {
+                doc.addImage(logoBase64, 'PNG', 15, 12, 38, 16);
+            } catch(e) { console.warn('Could not render logo in PDF', e); }
+        }
+
+        const startX = logoBase64 ? 58 : 15;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(14);
+        doc.setTextColor(30, 41, 59);
+        doc.text('PT PUTRA BANUA MANDIRI', startX, 18);
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 116, 139);
+        doc.text('REKAPITULASI ANALITIK & LAPORAN KEUANGAN BISNIS', startX, 24);
+
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.5);
+        doc.line(15, 32, 195, 32);
+
+        // 2. Report Meta Box
+        doc.setFillColor(248, 250, 252);
+        doc.roundedRect(15, 36, 180, 22, 3, 3, 'F');
+
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(79, 70, 229);
+        doc.text('RINGKASAN EKSEKUTIF', 20, 43);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(71, 85, 105);
+        doc.text(`Tanggal Dicetak: ${dateStr}`, 20, 50);
+        const userName = (typeof currentUser !== 'undefined' && currentUser && currentUser.name) ? currentUser.name : 'Administrator';
+        doc.text(`Dicetak Oleh: ${userName}`, 110, 43);
+        doc.text(`Total Transaksi: ${docs.length} Invoice`, 110, 50);
+
+        // AutoTable Runner Helper
+        const runAutoTable = (options) => {
+            try {
+                if (typeof doc.autoTable === 'function') {
+                    doc.autoTable(options);
+                } else if (window.jspdf && typeof window.jspdf.autoTable === 'function') {
+                    window.jspdf.autoTable(doc, options);
+                } else if (typeof window.autoTable === 'function') {
+                    window.autoTable(doc, options);
+                }
+            } catch(e) {
+                console.warn('AutoTable call failed:', e);
+            }
+        };
+
+        // 3. Key Metrics Table (Autotable)
+        let lastY = 63;
+        runAutoTable({
+            startY: 63,
+            head: [['Indikator Performa (KPI)', 'Nilai / Nominal', 'Keterangan']],
+            body: [
+                ['Total Omset Tagihan', `Rp ${totalOmset.toLocaleString('id-ID')}`, `${docs.length} total invoice`],
+                ['Total Pendapatan Terbayar (Lunas)', `Rp ${totalPaid.toLocaleString('id-ID')}`, `${paidCount} invoice lunas`],
+                ['Total Sisa Piutang (Pending/Overdue)', `Rp ${totalPending.toLocaleString('id-ID')}`, `${pendingCount} invoice belum lunas`],
+                ['Tingkat Pelunasan (Collection Rate)', `${docs.length > 0 ? Math.round((paidCount / docs.length) * 100) : 0}%`, `${paidCount} dari ${docs.length} lunas`],
+                ['Komposisi Tipe Transaksi', `${normalCount} Reguler / ${rentalCount} Sewa`, 'Distribusi tipe tagihan'],
+                ['Total Pelanggan Aktif', `${Object.keys(clientTotals).length} Pelanggan`, 'Mitra bisnis terdaftar']
+            ],
+            theme: 'striped',
+            headStyles: { fillColor: [79, 70, 229], textColor: [255, 255, 255], fontStyle: 'bold' },
+            styles: { fontSize: 9, cellPadding: 3 }
+        });
+        lastY = (doc.lastAutoTable && doc.lastAutoTable.finalY) ? doc.lastAutoTable.finalY : 120;
+
+        // 4. Monthly Rekap Table
+        const monthlyDataArr = Object.keys(monthlySummary).sort().reverse().map(k => {
+            const item = monthlySummary[k];
+            const rate = item.total > 0 ? Math.round((item.paid / item.total) * 100) : 0;
+            return [
+                item.label,
+                `${item.count} Inv`,
+                `Rp ${item.total.toLocaleString('id-ID')}`,
+                `Rp ${item.paid.toLocaleString('id-ID')}`,
+                `Rp ${item.pending.toLocaleString('id-ID')}`,
+                `${rate}%`
+            ];
+        });
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.setTextColor(30, 41, 59);
+        doc.text('Detail Rekapitulasi per Bulan:', 15, lastY + 10);
+
+        runAutoTable({
+            startY: lastY + 14,
+            head: [['Bulan / Tahun', 'Jumlah', 'Total Omset', 'Nominal Lunas', 'Sisa Piutang', 'Rate']],
+            body: monthlyDataArr,
+            theme: 'grid',
+            headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold' },
+            styles: { fontSize: 8, cellPadding: 3 }
+        });
+        lastY = (doc.lastAutoTable && doc.lastAutoTable.finalY) ? doc.lastAutoTable.finalY : lastY + 60;
+
+        // 5. Top 5 Clients Table (SORTED NUMERICALLY)
+        const topClientsArr = Object.entries(clientTotals)
+            .sort((a, b) => b[1].total - a[1].total)
+            .slice(0, 5)
+            .map(([name, d]) => [name, `${d.count} Invoice`, `Rp ${d.total.toLocaleString('id-ID')}`]);
+
+        if (lastY + 45 > 280) {
+            doc.addPage();
+            lastY = 15;
+        } else {
+            lastY = lastY + 10;
+        }
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.setTextColor(30, 41, 59);
+        doc.text('Top 5 Pelanggan Paling Aktif:', 15, lastY);
+
+        runAutoTable({
+            startY: lastY + 4,
+            head: [['Nama Pelanggan', 'Jumlah Invoice', 'Total Transaksi']],
+            body: topClientsArr,
+            theme: 'striped',
+            headStyles: { fillColor: [16, 185, 129], textColor: [255, 255, 255], fontStyle: 'bold' },
+            styles: { fontSize: 8.5, cellPadding: 3 }
+        });
+
+        // Footer Page Numbers
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8);
+            doc.setTextColor(148, 163, 184);
+            doc.text(`PT PUTRA BANUA MANDIRI — Laporan Rekapitulasi Analitik — Halaman ${i} dari ${pageCount}`, 15, 290);
+        }
+
+        // Save PDF
+        const filename = `Rekap_Analitik_PBM_${now.toISOString().slice(0,10)}.pdf`;
+        doc.save(filename);
+        showToast('Laporan Rekap PDF berhasil di-download!', 'success');
+
+        if (typeof ActivityLog !== 'undefined') {
+            ActivityLog.add('pdf', 'Download Rekap PDF Analitik', `Laporan rekap keuangan berhasil di-download (${filename})`);
+        }
+    } catch(err) {
+        console.error('Error generating analytics PDF:', err);
+        showToast('Gagal memproses Rekap PDF: ' + err.message, 'error');
+    }
+};
 
