@@ -1,8 +1,9 @@
 // Inisialisasi Kredensial - Hardcoded for Security
-const APPWRITE_ENDPOINT = 'https://sgp.cloud.appwrite.io/v1';
-const APPWRITE_PROJECT = '69d9eeb20034b5287618';
-const APPWRITE_DATABASE = '69d9f15c0001694b8ef4';
+const APPWRITE_ENDPOINT   = 'https://sgp.cloud.appwrite.io/v1';
+const APPWRITE_PROJECT    = '69d9eeb20034b5287618';
+const APPWRITE_DATABASE   = '69d9f15c0001694b8ef4';
 const APPWRITE_COLLECTION = 'invoice';
+const APPWRITE_LOG_COLLECTION = '6aa8f9550018ae5de429'; // Koleksi riwayat aktivitas
 
 const client = new Appwrite.Client()
     .setEndpoint(APPWRITE_ENDPOINT)
@@ -175,6 +176,60 @@ const API = {
         } catch (error) {
             console.error("Error updating status:", error);
             throw error;
+        }
+    },
+
+    // ── Activity Log ─────────────────────────────────────
+
+    async addLog(data) {
+        try {
+            return await databases.createDocument(
+                APPWRITE_DATABASE,
+                APPWRITE_LOG_COLLECTION,
+                Appwrite.ID.unique(),
+                data
+            );
+        } catch (error) {
+            console.error("Error saving activity log:", error);
+        }
+    },
+
+    async getLogs(limit = 200) {
+        try {
+            const response = await databases.listDocuments(
+                APPWRITE_DATABASE,
+                APPWRITE_LOG_COLLECTION,
+                [
+                    Appwrite.Query.orderDesc('ts'),
+                    Appwrite.Query.limit(limit)
+                ]
+            );
+            return response.documents;
+        } catch (error) {
+            console.error("Error fetching logs:", error);
+            return [];
+        }
+    },
+
+    async clearLogs() {
+        try {
+            // Fetch all log IDs then delete them
+            let offset = 0;
+            while (true) {
+                const res = await databases.listDocuments(
+                    APPWRITE_DATABASE,
+                    APPWRITE_LOG_COLLECTION,
+                    [Appwrite.Query.limit(100), Appwrite.Query.offset(offset)]
+                );
+                if (res.documents.length === 0) break;
+                await Promise.all(res.documents.map(doc =>
+                    databases.deleteDocument(APPWRITE_DATABASE, APPWRITE_LOG_COLLECTION, doc.$id)
+                ));
+                if (res.documents.length < 100) break;
+                offset += 100;
+            }
+        } catch (error) {
+            console.error("Error clearing logs:", error);
         }
     }
 };

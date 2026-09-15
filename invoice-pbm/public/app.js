@@ -17,6 +17,276 @@ let currentSortBy = 'date';
 let currentSortDir = 'desc';
 let currentTypeFilter = 'all';
 
+// ══════════════════════════════════════════════════════
+//  ACTIVITY LOG MODULE
+// ══════════════════════════════════════════════════════
+const ActivityLog = {
+    MAX: 200,
+    KEY: 'pbm_activity_log',
+    USER_KEY: 'pbm_current_user',
+    _filter: 'all',
+
+    // Kategori per action type
+    _categories: {
+        create_invoice: 'invoice', edit_invoice: 'invoice',
+        delete_invoice: 'invoice', update_status: 'invoice',
+        download_pdf: 'pdf', share_pdf: 'pdf',
+        login: 'auth', logout: 'auth',
+        notif_open_form: 'invoice'
+    },
+
+    // Ikon per action type
+    _icons: {
+        create_invoice: { cls: 'create',  fa: 'fa-plus-circle' },
+        edit_invoice:   { cls: 'edit',    fa: 'fa-pen-to-square' },
+        delete_invoice: { cls: 'delete',  fa: 'fa-trash-can' },
+        update_status:  { cls: 'status',  fa: 'fa-circle-check' },
+        download_pdf:   { cls: 'pdf',     fa: 'fa-file-pdf' },
+        share_pdf:      { cls: 'share',   fa: 'fa-share-nodes' },
+        login:          { cls: 'login',   fa: 'fa-right-to-bracket' },
+        logout:         { cls: 'logout',  fa: 'fa-right-from-bracket' },
+        notif_open_form:{ cls: 'notif',   fa: 'fa-bell' }
+    },
+
+    /** Simpan user saat ini ke memory + localStorage */
+    setUser(email, name) {
+        const user = { email: email || '', name: name || email || 'Unknown' };
+        try { localStorage.setItem(this.USER_KEY, JSON.stringify(user)); } catch {}
+        this._user = user;
+        // Update UI di header jika ada
+        const el = document.getElementById('current-user-display');
+        if (el) el.textContent = user.name || user.email;
+    },
+
+    /** Ambil user saat ini */
+    getUser() {
+        if (this._user) return this._user;
+        try {
+            const u = JSON.parse(localStorage.getItem(this.USER_KEY) || 'null');
+            if (u) { this._user = u; return u; }
+        } catch {}
+        return { email: '', name: 'Unknown' };
+    },
+
+    /** Hapus user (saat logout) */
+    clearUser() {
+        this._user = null;
+        try { localStorage.removeItem(this.USER_KEY); } catch {}
+    },
+
+    /** Tambah log baru — simpan ke localStorage dulu (instant), lalu push ke Appwrite */
+    add(action, label, detail = '') {
+        const user = this.getUser();
+        const entry = {
+            id: Date.now() + Math.random().toString(36).slice(2),
+            action,
+            label,
+            detail,
+            user: user.name || user.email || 'Unknown',
+            userEmail: user.email || '',
+            ts: Date.now()
+        };
+
+        // 1. Simpan ke localStorage cache dulu (instant)
+        const cached = this._getCache();
+        cached.unshift(entry);
+        if (cached.length > this.MAX) cached.splice(this.MAX);
+        this._setCache(cached);
+        this._updateBadge(cached);
+
+        // Re-render jika panel terbuka
+        const panel = document.getElementById('activity-panel');
+        if (panel && panel.classList.contains('open')) this._renderEntries(cached);
+
+        // 2. Push ke Appwrite di background (non-blocking)
+        API.addLog({
+            action: entry.action,
+            label:  entry.label,
+            detail: entry.detail || '',
+            user:   entry.user,
+            userEmail: entry.userEmail,
+            ts:     entry.ts
+        }).catch(() => {}); // Abaikan error agar tidak ganggu UI
+    },
+
+    /** Ambil dari localStorage cache (cepat, untuk badge) */
+    getAll() { return this._getCache(); },
+
+    /** Cache helpers */
+    _getCache() {
+        try { return JSON.parse(localStorage.getItem(this.KEY) || '[]'); } catch { return []; }
+    },
+    _setCache(entries) {
+        try { localStorage.setItem(this.KEY, JSON.stringify(entries)); } catch {}
+    },
+
+    /** Hapus semua log — dari Appwrite & cache */
+    clear() {
+        // Hapus dari localStorage cache
+        try { localStorage.removeItem(this.KEY); } catch {}
+        this._updateBadge([]);
+        // Hapus dari Appwrite di background
+        const listEl = document.getElementById('activity-list');
+        if (listEl) listEl.innerHTML = `<div class="activity-empty"><i class="fa-solid fa-spinner fa-spin"></i>Menghapus...</div>`;
+        API.clearLogs().then(() => this.render()).catch(() => {
+            if (listEl) listEl.innerHTML = `<div class="activity-empty"><i class="fa-solid fa-box-open"></i>Belum ada riwayat aktivitas</div>`;
+        });
+    },
+
+    /** Set filter aktif */
+    setFilter(filter) {
+        this._filter = filter;
+        document.querySelectorAll('.activity-pill').forEach(p =>
+            p.classList.toggle('active', p.dataset.filter === filter)
+        );
+        this.render();
+    },
+
+    /** Format timestamp relatif */
+    _relativeTime(ts) {
+        const diff = Math.floor((Date.now() - ts) / 1000);
+        if (diff < 60) return 'Baru saja';
+        if (diff < 3600) return `${Math.floor(diff/60)} menit lalu`;
+        if (diff < 86400) return `${Math.floor(diff/3600)} jam lalu`;
+        if (diff < 86400*7) return `${Math.floor(diff/86400)} hari lalu`;
+        return new Date(ts).toLocaleDateString('id-ID', { day:'numeric', month:'short', year:'numeric' });
+    },
+
+    /** Inisial untuk avatar */
+    _initials(name) {
+        if (!name) return '?';
+        return name.split(/[\s@]+/).slice(0,2).map(s => s[0]?.toUpperCase()).join('');
+    },
+
+    /** Warna avatar konsisten per user */
+    _avatarColor(str) {
+        const palette = ['#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#14b8a6','#f97316','#06b6d4'];
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+        return palette[Math.abs(hash) % palette.length];
+    },
+
+    /** Update badge di sidebar */
+    _updateBadge(entries) {
+        const badge = document.getElementById('activity-badge');
+        if (!badge) return;
+        const count = entries.length;
+        if (count > 0) {
+            badge.style.display = 'flex';
+            badge.textContent = count > 99 ? '99+' : count;
+        } else {
+            badge.style.display = 'none';
+        }
+    },
+
+    /** Render log ke panel — fetch dari Appwrite, update cache, tampilkan */
+    render() {
+        const listEl   = document.getElementById('activity-list');
+        const footerEl = document.getElementById('activity-footer');
+        if (!listEl) return;
+
+        // Tampilkan cache lokal dulu agar tidak blank saat loading
+        const cached = this._getCache();
+        if (cached.length > 0) this._renderEntries(cached);
+        else listEl.innerHTML = `<div class="activity-empty"><i class="fa-solid fa-spinner fa-spin"></i>Memuat riwayat...</div>`;
+
+        // Fetch terbaru dari Appwrite
+        API.getLogs(this.MAX).then(docs => {
+            // Normalisasi field dari Appwrite doc
+            const entries = docs.map(d => ({
+                id:        d.$id,
+                action:    d.action,
+                label:     d.label,
+                detail:    d.detail || '',
+                user:      d.user   || 'Unknown',
+                userEmail: d.userEmail || '',
+                ts:        d.ts
+            }));
+            // Update cache lokal
+            this._setCache(entries);
+            this._updateBadge(entries);
+            this._renderEntries(entries);
+            if (footerEl) footerEl.textContent = `${entries.length} aktivitas tercatat`;
+        }).catch(() => {
+            // Fallback ke cache lokal jika Appwrite gagal
+            this._renderEntries(cached);
+        });
+    },
+
+    /** Render daftar entry ke DOM (dipakai oleh render() dan add()) */
+    _renderEntries(allEntries) {
+        const listEl   = document.getElementById('activity-list');
+        const footerEl = document.getElementById('activity-footer');
+        if (!listEl) return;
+
+        // Apply filter
+        let entries = allEntries;
+        if (this._filter !== 'all') {
+            entries = allEntries.filter(e =>
+                (this._categories[e.action] || 'other') === this._filter
+            );
+        }
+
+        if (footerEl) footerEl.textContent = `${allEntries.length} aktivitas tercatat`;
+
+        if (entries.length === 0) {
+            listEl.innerHTML = `<div class="activity-empty"><i class="fa-solid fa-box-open"></i>Belum ada riwayat aktivitas</div>`;
+            return;
+        }
+
+        listEl.innerHTML = '';
+        let lastDate = null;
+
+        entries.forEach(entry => {
+            const entryDate = new Date(entry.ts).toLocaleDateString('id-ID', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+            if (entryDate !== lastDate) {
+                const sep = document.createElement('div');
+                sep.className = 'activity-date-sep';
+                sep.textContent = entryDate;
+                listEl.appendChild(sep);
+                lastDate = entryDate;
+            }
+
+            const icon     = this._icons[entry.action] || { cls: 'edit', fa: 'fa-circle-info' };
+            const userName = entry.user || 'Unknown';
+            const initials = this._initials(userName);
+            const avatarBg = this._avatarColor(userName);
+            const timeStr  = new Date(entry.ts).toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' });
+
+            const item = document.createElement('div');
+            item.className = 'activity-item';
+            item.innerHTML = `
+                <div class="activity-icon ${icon.cls}"><i class="fa-solid ${icon.fa}"></i></div>
+                <div class="activity-body">
+                    <div class="activity-label" title="${entry.label}">${entry.label}</div>
+                    ${entry.detail ? `<div class="activity-detail" title="${entry.detail}">${entry.detail}</div>` : ''}
+                    <div class="activity-meta">
+                        <span class="activity-user-avatar" style="background:${avatarBg}" title="${entry.userEmail || userName}">${initials}</span>
+                        <span class="activity-user-name">${userName}</span>
+                        <span class="activity-dot">&middot;</span>
+                        <span class="activity-time">${this._relativeTime(entry.ts)}</span>
+                        <span class="activity-clock">${timeStr}</span>
+                    </div>
+                </div>
+            `;
+            listEl.appendChild(item);
+        });
+    }
+};
+
+/** Toggle activity log panel */
+window.toggleActivityPanel = function(forceState) {
+    const panel   = document.getElementById('activity-panel');
+    const overlay = document.getElementById('activity-overlay');
+    if (!panel) return;
+    const isOpen    = panel.classList.contains('open');
+    const shouldOpen = forceState !== undefined ? forceState : !isOpen;
+    panel.classList.toggle('open', shouldOpen);
+    if (overlay) overlay.classList.toggle('open', shouldOpen);
+    if (shouldOpen) ActivityLog.render();
+};
+
+
 // Analytics Chart Instances & State
 let revenueChart = null;
 let typeChart = null;
@@ -552,6 +822,10 @@ function openRentalForm(notif) {
         // Buka form sewa (mode buat baru, bukan edit)
         showCreate('rental');
         document.getElementById('form-title').textContent = 'Buat Invoice Sewa (Bulan Ini)';
+
+        // Log aktivitas
+        const clientNameLog = (Array.isArray(invoice.clientName) ? invoice.clientName[0] : invoice.clientName) || notif.clientName || '-';
+        ActivityLog.add('notif_open_form', `Form sewa dibuka dari notifikasi`, `Klien: ${clientNameLog}`);
 
         // Isi data klien & catatan dari invoice asli
         document.getElementById('inv-client').value = (Array.isArray(invoice.clientName) ? invoice.clientName[0] : invoice.clientName) || '';
@@ -1105,6 +1379,14 @@ document.getElementById('invoice-form').addEventListener('submit', async (e) => 
 
         notify(editingId ? 'Invoice berhasil diperbarui!' : 'Invoice berhasil direkam!', 'success');
 
+        // Log aktivitas
+        const savedType = editingId ? 'edit_invoice' : 'create_invoice';
+        const savedLabel = editingId
+            ? `Invoice ${invoiceData.NoInvoice} diperbarui`
+            : `Invoice ${invoiceData.NoInvoice} dibuat`;
+        const savedClient = Array.isArray(invoiceData.clientName) ? invoiceData.clientName[0] : invoiceData.clientName;
+        ActivityLog.add(savedType, savedLabel, `Klien: ${savedClient || '-'} | Total: Rp ${(invoiceData.totalAmount||0).toLocaleString('id-ID')}`);
+
         editingId = null;
         statsData = []; // Reset stats cache to force reload
         showDashboard();
@@ -1335,6 +1617,7 @@ window.deleteInvoice = async function(id) {
         try {
             await API.deleteInvoice(id);
             notify('Invoice berhasil dihapus', 'success');
+            ActivityLog.add('delete_invoice', `Invoice dihapus`, `ID: ${id}`);
             statsData = [];
             loadInvoices(currentPage);
         } catch(e) {
@@ -1347,6 +1630,7 @@ window.updatePaymentStatus = async function(id, newStatus) {
     try {
         await API.updateInvoiceStatus(id, newStatus);
         notify('Status pembayaran diperbarui', 'success');
+        ActivityLog.add('update_status', `Status invoice diubah ke: ${newStatus}`, `ID: ${id}`);
     } catch (e) {
         notify('Gagal mengupdate status: ' + e.message, 'error');
         loadInvoices(); // reload to reset the select to previous state
@@ -1360,6 +1644,7 @@ window.downloadPDF = async function(id) {
     if(invoice) {
         try {
             await window.generatePDF(invoice, 'download');
+            ActivityLog.add('download_pdf', `PDF diunduh: ${invoice.NoInvoice}`, `Klien: ${Array.isArray(invoice.clientName) ? invoice.clientName[0] : invoice.clientName}`);
             if (invoice.paymentStatus === 'pending') {
                 updatePaymentStatus(id, 'paid');
             }
@@ -1392,6 +1677,7 @@ window.nativeShare = async function(id) {
             if (invoice.paymentStatus === 'pending') {
                 updatePaymentStatus(id, 'paid');
             }
+            ActivityLog.add('share_pdf', `PDF dibagikan: ${invoice.NoInvoice}`, `Klien: ${Array.isArray(invoice.clientName) ? invoice.clientName[0] : invoice.clientName}`);
         } else {
             notify('Browser/Ponsel Anda tidak mendukung share file PDF. Mengunduh file...', 'warning');
             await window.generatePDF(invoice, 'download');
@@ -1477,7 +1763,9 @@ window.handleLogin = async function(e) {
 
     try {
         await API.login(email, pass);
-        // Success
+        // Simpan info user ke ActivityLog
+        ActivityLog.setUser(email, email.split('@')[0]);
+        ActivityLog.add('login', `Login berhasil`, `Email: ${email}`);
         document.getElementById('view-login').style.display = 'none';
         document.querySelector('.app-container').style.display = 'flex';
         initAndLoad();
@@ -1494,6 +1782,9 @@ window.handleLogout = async function() {
     const confirmed = await showConfirm('Keluar', 'Anda yakin ingin keluar dari akun ini?', { type: 'warning', confirmText: 'Ya, Keluar', icon: 'fa-right-from-bracket' });
     if (confirmed) {
         try {
+            const logoutUser = ActivityLog.getUser();
+            ActivityLog.add('logout', `${logoutUser.name || logoutUser.email} logout`, '');
+            ActivityLog.clearUser();
             await API.logout();
             window.location.reload();
         } catch (e) {
@@ -1581,7 +1872,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     try {
         const session = await API.getSession();
         if (session) {
-            // Already logged in
+            // Already logged in — load user info ke ActivityLog
+            const userName = session.name || (session.email ? session.email.split('@')[0] : 'Admin');
+            ActivityLog.setUser(session.email || '', userName);
             document.getElementById('view-login').style.display = 'none';
             document.querySelector('.app-container').style.display = 'flex';
             initAndLoad();

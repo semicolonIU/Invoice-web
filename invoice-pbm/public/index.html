@@ -69,6 +69,10 @@
                 <a href="#" id="nav-analytics"><i class="fa-solid fa-chart-line"></i> Analitik Bisnis</a>
                 <a href="#" id="nav-create"><i class="fa-solid fa-plus"></i> Invoice Reguler</a>
                 <a href="#" id="nav-create-rental"><i class="fa-solid fa-truck-ramp-box"></i> Invoice Sewa</a>
+                <a href="#" id="nav-activity-log" class="nav-activity-btn" onclick="toggleActivityPanel(true); closeMobileSidebar(); return false;">
+                    <i class="fa-solid fa-clock-rotate-left"></i> Riwayat Aktivitas
+                    <span class="activity-badge" id="activity-badge"></span>
+                </a>
 
             </nav>
             <div class="sidebar-footer">
@@ -393,7 +397,34 @@
             <div id="confirm-modal-root"></div>
 
         </main>
-    </div>
+
+        <!-- Activity Log Overlay -->
+        <div class="activity-overlay" id="activity-overlay" onclick="toggleActivityPanel(false)"></div>
+
+        <!-- Activity Log Panel -->
+        <div class="activity-panel" id="activity-panel">
+            <div class="activity-panel-header">
+                <h3><i class="fa-solid fa-clock-rotate-left"></i> Riwayat Aktivitas</h3>
+                <div class="activity-header-actions">
+                    <button class="activity-clear-btn" onclick="ActivityLog.clear(); ActivityLog.render()" title="Hapus semua log">
+                        <i class="fa-solid fa-trash-can"></i> Hapus Semua
+                    </button>
+                    <button class="activity-close-btn" onclick="toggleActivityPanel(false)" title="Tutup">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="activity-filter-bar" id="activity-filter-bar">
+                <button class="activity-pill active" data-filter="all" onclick="ActivityLog.setFilter('all')">Semua</button>
+                <button class="activity-pill" data-filter="invoice" onclick="ActivityLog.setFilter('invoice')">Invoice</button>
+                <button class="activity-pill" data-filter="auth" onclick="ActivityLog.setFilter('auth')">Autentikasi</button>
+                <button class="activity-pill" data-filter="pdf" onclick="ActivityLog.setFilter('pdf')">PDF</button>
+            </div>
+            <div class="activity-list" id="activity-list">
+                <div class="activity-empty"><i class="fa-solid fa-box-open"></i>Belum ada riwayat aktivitas</div>
+            </div>
+            <div class="activity-footer" id="activity-footer">0 aktivitas tercatat</div>
+        </div>
 
     <!-- Datalists for Autocomplete -->
     <datalist id="saved-items-list"></datalist>
