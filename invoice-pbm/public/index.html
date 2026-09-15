@@ -128,28 +128,25 @@
                             <input type="text" id="search-input" placeholder="Cari klien atau nomor..." oninput="filterInvoices()">
                             <button id="search-clear-btn" onclick="clearSearch()" title="Hapus pencarian" style="display:none;">&times;</button>
                         </div>
-                        <select id="type-filter-select" onchange="filterInvoices()">
-                            <option value="all">Tipe: Semua Invoice</option>
-                            <option value="normal">Tipe: Reguler</option>
-                            <option value="rental">Tipe: Sewa</option>
-                        </select>
-                        <select id="sort-select" onchange="sortInvoices()">
-                            <option value="createdAt">Urut: Teranyar dibuat</option>
-                            <option value="dateNewest">Urut: Tanggal Invoice (Baru)</option>
-                            <option value="dateOldest">Urut: Tanggal Invoice (Lama)</option>
-                        </select>
                     </div>
                     <button class="btn btn-primary" onclick="showCreate('normal')"><i class="fa-solid fa-plus"></i> Invoice Baru</button>
                 </div>
+                
+                <div class="filter-pill-group">
+                    <button class="filter-pill active" data-type="all" onclick="setFilterType('all')">Semua Invoice</button>
+                    <button class="filter-pill" data-type="normal" onclick="setFilterType('normal')">Reguler</button>
+                    <button class="filter-pill" data-type="rental" onclick="setFilterType('rental')">Sewa</button>
+                </div>
+
                 <div class="table-container">
                     <table id="invoice-table">
                         <thead>
                             <tr>
-                                <th>No. Invoice</th>
-                                <th>Klien</th>
+                                <th class="sortable" onclick="handleSort('NoInvoice')">No. Invoice <i class="fa-solid fa-sort sort-icon" id="sort-icon-NoInvoice"></i></th>
+                                <th class="sortable" onclick="handleSort('clientName')">Klien <i class="fa-solid fa-sort sort-icon" id="sort-icon-clientName"></i></th>
                                 <th>Keterangan Item</th>
-                                <th>Tanggal</th>
-                                <th>Total (Rp)</th>
+                                <th class="sortable active-sort" onclick="handleSort('date')">Tanggal <i class="fa-solid fa-sort-down sort-icon" id="sort-icon-date"></i></th>
+                                <th class="sortable" onclick="handleSort('totalAmount')">Total (Rp) <i class="fa-solid fa-sort sort-icon" id="sort-icon-totalAmount"></i></th>
                                 <th>Status</th>
                                 <th>Aksi</th>
                             </tr>

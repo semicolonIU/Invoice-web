@@ -981,6 +981,60 @@ textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79, 70
     .confirm-card { padding: 24px; width: 92%; }
 }
 
+/* Filter Pills & Sortable Table */
+.filter-pill-group {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+.filter-pill {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.filter-pill:hover {
+    background: rgba(255,255,255,0.05);
+    color: var(--text-main);
+}
+.filter-pill.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+}
+
+th.sortable {
+    cursor: pointer;
+    transition: color 0.2s, background 0.2s;
+    user-select: none;
+}
+th.sortable:hover {
+    color: #fff;
+    background: rgba(255,255,255,0.05);
+}
+th.sortable.active-sort {
+    color: var(--primary);
+}
+.sort-icon {
+    margin-left: 4px;
+    font-size: 11px;
+    opacity: 0.5;
+}
+th.sortable:hover .sort-icon {
+    opacity: 1;
+}
+th.sortable.active-sort .sort-icon {
+    opacity: 1;
+    color: var(--primary);
+}
+
 /* ==========================================================================
    Analytics Dashboard Styles & Responsiveness
    ========================================================================== */

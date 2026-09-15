@@ -13,7 +13,9 @@ let itemsPerPage = 10;
 let totalItems = 0;
 let statsData = []; // Cache for stats and metadata
 let searchDebounceTimer = null; // Debounce timer for search
-let searchFilteredData = null; // Hasil filter client-side (null = tidak ada active search)
+let currentSortBy = 'date';
+let currentSortDir = 'desc';
+let currentTypeFilter = 'all';
 
 // Analytics Chart Instances & State
 let revenueChart = null;
@@ -522,12 +524,12 @@ async function loadInvoices(page = 1) {
     currentPage = page;
     const offset = (page - 1) * itemsPerPage;
     const searchQuery = document.getElementById('search-input').value;
-    const typeFilter = document.getElementById('type-filter-select')?.value || 'all';
+    const typeFilter = currentTypeFilter;
     
     try {
         tbody.innerHTML = '<tr><td colspan="7" class="text-center loading-text"><i class="fa-solid fa-spinner fa-spin"></i> Memuat data tagihan...</td></tr>';
         
-        const result = await API.getInvoices(itemsPerPage, offset, searchQuery, typeFilter);
+        const result = await API.getInvoices(itemsPerPage, offset, searchQuery, typeFilter, currentSortBy, currentSortDir);
         currentInvoices = result.documents;
         totalItems = result.total;
         
@@ -563,12 +565,8 @@ async function loadStatsAndMetadata() {
         // Render Dashboard Analitik Kesehatan Bisnis
         renderAnalyticsDashboard(docs);
 
-        // Jika ada active search/filter saat statsData selesai dimuat, refresh hasilnya
-        const activeQuery = document.getElementById('search-input')?.value.trim().toLowerCase() || '';
-        const activeFilter = document.getElementById('type-filter-select')?.value || 'all';
-        if (activeQuery || activeFilter !== 'all') {
-            performClientSideSearch(activeQuery, activeFilter);
-        }
+        // Setelah background load selesai, tidak perlu lagi filter manual 
+        // karena search sekarang murni di-handle oleh server.
     } catch (e) {
         console.error("Error loading stats:", e);
         // Fallback: gunakan data yang sudah ter-render sebelumnya
@@ -635,19 +633,9 @@ window.changePage = function(delta) {
     }
 }
 
-// Navigasi halaman — otomatis pilih mode client-side atau server-side
+// Navigasi halaman
 function navigateToPage(page) {
-    if (searchFilteredData !== null) {
-        // Mode client-side search: paginate dari searchFilteredData
-        currentPage = page;
-        const offset = (page - 1) * itemsPerPage;
-        const pageData = searchFilteredData.slice(offset, offset + itemsPerPage);
-        currentInvoices = pageData;
-        renderInvoiceTable(pageData);
-        renderPagination();
-    } else {
-        loadInvoices(page);
-    }
+    loadInvoices(page);
 }
 
 function refreshMetadata(docs) {
@@ -717,24 +705,48 @@ function populateDL(id, values) {
     dl.innerHTML = arr.map(v => `<option value="${v}">`).join('');
 }
 
+window.setFilterType = function(type) {
+    currentTypeFilter = type;
+    document.querySelectorAll('.filter-pill').forEach(el => el.classList.remove('active'));
+    document.querySelector(`.filter-pill[data-type="${type}"]`).classList.add('active');
+    filterInvoices();
+}
+
+window.handleSort = function(column) {
+    if (currentSortBy === column) {
+        currentSortDir = currentSortDir === 'desc' ? 'asc' : 'desc';
+    } else {
+        currentSortBy = column;
+        currentSortDir = 'desc'; // default when changing column
+    }
+    
+    // Update UI icons
+    document.querySelectorAll('th.sortable').forEach(th => {
+        th.classList.remove('active-sort');
+        const icon = th.querySelector('.sort-icon');
+        if (icon) icon.className = 'fa-solid fa-sort sort-icon';
+    });
+    
+    const activeTh = document.querySelector(`th[onclick="handleSort('${column}')"]`);
+    if (activeTh) {
+        activeTh.classList.add('active-sort');
+        const activeIcon = activeTh.querySelector('.sort-icon');
+        if (activeIcon) {
+            activeIcon.className = `fa-solid fa-sort-${currentSortDir === 'desc' ? 'down' : 'up'} sort-icon`;
+        }
+    }
+    
+    loadInvoices(1);
+}
+
 window.filterInvoices = function() {
-    // Tampilkan/sembunyikan tombol clear
     const searchInput = document.getElementById('search-input');
     const clearBtn = document.getElementById('search-clear-btn');
     if (clearBtn) clearBtn.style.display = searchInput?.value ? 'flex' : 'none';
 
     clearTimeout(searchDebounceTimer);
     searchDebounceTimer = setTimeout(() => {
-        const query = searchInput.value.trim().toLowerCase();
-        const typeFilter = document.getElementById('type-filter-select')?.value || 'all';
-
-        // --- Hybrid Search: Client-side jika statsData sudah ter-cache ---
-        if (statsData.length > 0) {
-            performClientSideSearch(query, typeFilter);
-        } else {
-            // Fallback: server-side search (statsData belum ready)
-            loadInvoices(1);
-        }
+        loadInvoices(1);
     }, 300);
 }
 
@@ -743,59 +755,11 @@ window.clearSearch = function() {
     if (searchInput) searchInput.value = '';
     const clearBtn = document.getElementById('search-clear-btn');
     if (clearBtn) clearBtn.style.display = 'none';
-    searchFilteredData = null;
     loadInvoices(1);
-}
-
-// Client-side search pada statsData dengan paginasi lokal
-function performClientSideSearch(query, typeFilter) {
-    // Jika tidak ada query dan filter = all, kembali ke mode server-side normal
-    if (!query && typeFilter === 'all') {
-        searchFilteredData = null;
-        loadInvoices(1);
-        return;
-    }
-
-    let filtered = statsData;
-
-    // Filter berdasarkan tipe
-    if (typeFilter === 'rental') {
-        filtered = filtered.filter(inv => String(inv.NoInvoice || '').toUpperCase().startsWith('SW'));
-    } else if (typeFilter === 'normal') {
-        filtered = filtered.filter(inv => String(inv.NoInvoice || '').toUpperCase().startsWith('INV'));
-    }
-
-    // Filter berdasarkan query pencarian (partial match, case-insensitive, multi-kata)
-    if (query) {
-        const keywords = query.split(/\s+/).filter(k => k.length > 0);
-        filtered = filtered.filter(inv => {
-            const noInv = String(inv.NoInvoice || '').toLowerCase();
-            const clientRaw = Array.isArray(inv.clientName) ? inv.clientName[0] : inv.clientName;
-            const client = String(clientRaw || '').toLowerCase();
-            // Setiap keyword dicek: minimal muncul di noInvoice ATAU clientName
-            return keywords.every(kw => noInv.includes(kw) || client.includes(kw));
-        });
-    }
-
-    // Simpan hasil filter dan render dengan paginasi lokal
-    searchFilteredData = filtered;
-    totalItems = filtered.length;
-    currentPage = 1;
-
-    const pageData = filtered.slice(0, itemsPerPage);
-    currentInvoices = pageData;
-
-    renderInvoiceTable(pageData);
-    renderPagination();
-}
-
-window.sortInvoices = function() {
-    renderInvoiceTable(currentInvoices);
 }
 
 function renderInvoiceTable(docs) {
     const tbody = document.getElementById('invoice-list');
-    const sortMethod = document.getElementById('sort-select').value;
     
     // Process each doc to determine type and description
     let items = docs.map(invoice => {
@@ -816,20 +780,8 @@ function renderInvoiceTable(docs) {
         return { invoice, isRental, itemKeterangan };
     });
 
-    // Catatan: filter tipe (Reguler/Sewa) kini dilakukan server-side di loadInvoices/API
-    // sehingga totalItems sudah akurat untuk pagination.
-
-    // Sort
-    items.sort((a, b) => {
-        if (sortMethod === 'createdAt') {
-            return new Date(b.invoice.$createdAt) - new Date(a.invoice.$createdAt);
-        } else if (sortMethod === 'dateNewest') {
-            return new Date(b.invoice.date) - new Date(a.invoice.date);
-        } else if (sortMethod === 'dateOldest') {
-            return new Date(a.invoice.date) - new Date(b.invoice.date);
-        }
-        return 0;
-    });
+    // Catatan: filter tipe (Reguler/Sewa) dan pengurutan kini dilakukan server-side di loadInvoices/API
+    // sehingga totalItems sudah akurat untuk pagination dan semua halaman tersortir secara konsisten.
 
     if (items.length === 0) {
         tbody.innerHTML = '<tr><td colspan="7" class="text-center" style="color:var(--text-muted)">Data tidak ditemukan.</td></tr>';

@@ -50,14 +50,19 @@ const API = {
         }
     },
     
-    async getInvoices(limit = 10, offset = 0, searchQuery = "", typeFilter = "all") {
+    async getInvoices(limit = 10, offset = 0, searchQuery = "", typeFilter = "all", sortBy = "$createdAt", sortDir = "desc") {
         this.checkContext();
         try {
             const queries = [
                 Appwrite.Query.limit(limit),
-                Appwrite.Query.offset(offset),
-                Appwrite.Query.orderDesc('$createdAt')
+                Appwrite.Query.offset(offset)
             ];
+
+            if (sortDir === "desc") {
+                queries.push(Appwrite.Query.orderDesc(sortBy));
+            } else {
+                queries.push(Appwrite.Query.orderAsc(sortBy));
+            }
 
             if (searchQuery) {
                 // Split query into individual terms for fuzzy matching
