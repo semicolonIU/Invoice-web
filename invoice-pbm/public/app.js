@@ -192,6 +192,39 @@ window.calculateTotal = function() {
     return Number(total.toFixed(0)); // Ensure it's a clean integer for Appwrite if needed
 }
 
+window.roundTotal = function() {
+    const rows = document.querySelectorAll('.item-row');
+    if (rows.length === 0) {
+        showToast('Tidak ada item untuk dibulatkan.', 'warning');
+        return;
+    }
+
+    let total = 0;
+    rows.forEach(row => {
+        const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
+        const price = parseFloat(row.querySelector('.item-price').value) || 0;
+        total += (qty * price);
+    });
+
+    const rounded = Math.round(total / 1000) * 1000;
+    const diff = rounded - total;
+
+    if (diff === 0) {
+        showToast('Total sudah bulat (kelipatan Rp 1.000).', 'info');
+        return;
+    }
+
+    // Adjust the last item's price to make the total round
+    const lastRow = rows[rows.length - 1];
+    const lastQty = parseFloat(lastRow.querySelector('.item-qty').value) || 1;
+    const lastPrice = parseFloat(lastRow.querySelector('.item-price').value) || 0;
+    const adjustment = diff / lastQty;
+    lastRow.querySelector('.item-price').value = Math.round(lastPrice + adjustment);
+
+    calculateTotal();
+    showToast(`Total dibulatkan ke Rp ${rounded.toLocaleString('id-ID')} (selisih Rp ${Math.abs(diff).toLocaleString('id-ID')})`, 'success');
+}
+
 window.handleItemSelect = function(element) {
     const selectedName = element.value;
     if (savedItems[selectedName] !== undefined) {
@@ -903,10 +936,11 @@ function getInvoiceFormData() {
             notes:    document.getElementById('inv-notes').value.trim(),
             desc:     descArr,
             flags: {
-                showInv:  document.getElementById('chk-show-inv').checked,
-                showPo:   document.getElementById('chk-show-po').checked,
-                showSite: document.getElementById('chk-show-site').checked,
-                showDate: true
+                showInv:   document.getElementById('chk-show-inv').checked,
+                showPo:    document.getElementById('chk-show-po').checked,
+                showSite:  document.getElementById('chk-show-site').checked,
+                showDate:  document.getElementById('chk-show-date').checked,
+                showTbBg:  document.getElementById('chk-show-tbbg').checked
             }
         }),
         totalAmount:   calculateTotal()
@@ -1059,6 +1093,8 @@ window.editInvoice = function(id) {
     document.getElementById('chk-show-inv').checked  = (flags.showInv !== false);
     document.getElementById('chk-show-po').checked   = (flags.showPo !== false);
     document.getElementById('chk-show-site').checked = (flags.showSite !== false);
+    document.getElementById('chk-show-date').checked = (flags.showDate !== false);
+    document.getElementById('chk-show-tbbg').checked = (flags.showTbBg !== false);
 
     if (itemsArray.length > 0) {
         itemsArray.forEach((item, idx) => {
@@ -1593,10 +1629,7 @@ window.handlePdfScan = async function(input) {
             document.getElementById('inv-date').value = data.date.split('T')[0];
             highlightField('inv-date');
         }
-        if (data.notes) {
-            document.getElementById('inv-notes').value = data.notes;
-            highlightField('inv-notes');
-        }
+        // Notes tidak lagi di-scan oleh AI — biarkan kosong
 
         // Handle items
         if (data.items && Array.isArray(data.items)) {

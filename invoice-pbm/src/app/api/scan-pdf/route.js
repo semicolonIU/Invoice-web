@@ -49,7 +49,6 @@ Expected JSON Structure:
   "site": "string",
   "date": "YYYY-MM-DD",
   "items": [{"name":"string","qty":1,"price":0,"tb":"string","bg":"string","desc":"string"}],
-  "notes": "string",
   "type": "string"
 }
 

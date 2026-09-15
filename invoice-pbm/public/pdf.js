@@ -91,7 +91,7 @@ window.generatePDF = async function (invoiceData, action = 'download') {
 
     // Parse Data Once
     let itemsArray = [];
-    let flags = { showInv: true, showPo: true, showSite: true, showDate: true };
+    let flags = { showInv: true, showPo: true, showSite: true, showDate: true, showTbBg: true };
     let invType = 'normal';
     let rental = { awal: '', akhir: '' };
     let tbArr = [];
@@ -256,16 +256,24 @@ window.generatePDF = async function (invoiceData, action = 'download') {
         doc.setDrawColor(...lineGray);
         doc.setLineWidth(0.3);
         doc.roundedRect(boxX, boxY, boxW, boxH, 2, 2, 'FD');
-        doc.line(boxX + boxW / 2, boxY, boxX + boxW / 2, boxY + rowH);
 
         let currentY = boxY;
+        const showDateCol = (flags.showDate !== false);
 
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(...midGray);
-        doc.text('NO. INVOICE', boxX + 4, currentY + 4.5);
-        doc.text('TANGGAL', boxX + boxW / 2 + 4, currentY + 4.5);
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...ink);
-        doc.text(invNum, boxX + 4, currentY + 9.5);
-        doc.text(invDate, boxX + boxW / 2 + 4, currentY + 9.5);
+        if (showDateCol) {
+            doc.line(boxX + boxW / 2, boxY, boxX + boxW / 2, boxY + rowH);
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(...midGray);
+            doc.text('NO. INVOICE', boxX + 4, currentY + 4.5);
+            doc.text('TANGGAL', boxX + boxW / 2 + 4, currentY + 4.5);
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...ink);
+            doc.text(invNum, boxX + 4, currentY + 9.5);
+            doc.text(invDate, boxX + boxW / 2 + 4, currentY + 9.5);
+        } else {
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(...midGray);
+            doc.text('NO. INVOICE', boxX + 4, currentY + 4.5);
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...ink);
+            doc.text(invNum, boxX + 4, currentY + 9.5);
+        }
 
         currentY += rowH;
 
@@ -309,28 +317,52 @@ window.generatePDF = async function (invoiceData, action = 'download') {
         let tColStyles = {};
 
         if (pageType === 'INVOICE') {
-            tHead = [['#', 'Uraian Pekerjaan / Barang', 'Qty', 'Harga Satuan', isRental ? 'Keterangan' : 'TB/BG', 'Subtotal']];
-            tableBody = itemsArray.map((item, i) => {
-                const tbData = tbArr[i] !== undefined ? tbArr[i] : item.tb;
-                const bgData = bgArr[i] !== undefined ? bgArr[i] : item.bg;
-                const descData = descArr[i] !== undefined ? descArr[i] : item.desc;
-                return [
-                    i + 1,
-                    item.name,
-                    item.qty,
-                    'Rp ' + Number(item.price).toLocaleString('id-ID'),
-                    isRental ? (descData || '-') : ((tbData || "NO-ENTRY") + " / \n" + (bgData || "NO-ENTRY")),
-                    'Rp ' + (item.qty * item.price).toLocaleString('id-ID')
-                ];
-            });
-            tColStyles = {
-                0: { cellWidth: 10, halign: 'center' },
-                1: { cellWidth: 'auto' },
-                2: { cellWidth: 15, halign: 'center' },
-                3: { cellWidth: 28, halign: 'right' },
-                4: { cellWidth: 34, halign: isRental ? 'left' : 'center' },
-                5: { cellWidth: 31, halign: 'right' }
-            };
+            // Determine if TB/BG column should be shown
+            const showTbBgCol = isRental || (flags.showTbBg !== false);
+
+            if (showTbBgCol) {
+                tHead = [['#', 'Uraian Pekerjaan / Barang', 'Qty', 'Harga Satuan', isRental ? 'Keterangan' : 'TB/BG', 'Subtotal']];
+                tableBody = itemsArray.map((item, i) => {
+                    const tbData = tbArr[i] !== undefined ? tbArr[i] : item.tb;
+                    const bgData = bgArr[i] !== undefined ? bgArr[i] : item.bg;
+                    const descData = descArr[i] !== undefined ? descArr[i] : item.desc;
+                    return [
+                        i + 1,
+                        item.name,
+                        item.qty,
+                        'Rp ' + Number(item.price).toLocaleString('id-ID'),
+                        isRental ? (descData || '-') : ((tbData || "NO-ENTRY") + " / \n" + (bgData || "NO-ENTRY")),
+                        'Rp ' + (item.qty * item.price).toLocaleString('id-ID')
+                    ];
+                });
+                tColStyles = {
+                    0: { cellWidth: 10, halign: 'center' },
+                    1: { cellWidth: 'auto' },
+                    2: { cellWidth: 15, halign: 'center' },
+                    3: { cellWidth: 28, halign: 'right' },
+                    4: { cellWidth: 34, halign: isRental ? 'left' : 'center' },
+                    5: { cellWidth: 31, halign: 'right' }
+                };
+            } else {
+                // Hide TB/BG column for normal invoices
+                tHead = [['#', 'Uraian Pekerjaan / Barang', 'Qty', 'Harga Satuan', 'Subtotal']];
+                tableBody = itemsArray.map((item, i) => {
+                    return [
+                        i + 1,
+                        item.name,
+                        item.qty,
+                        'Rp ' + Number(item.price).toLocaleString('id-ID'),
+                        'Rp ' + (item.qty * item.price).toLocaleString('id-ID')
+                    ];
+                });
+                tColStyles = {
+                    0: { cellWidth: 10, halign: 'center' },
+                    1: { cellWidth: 'auto' },
+                    2: { cellWidth: 15, halign: 'center' },
+                    3: { cellWidth: 32, halign: 'right' },
+                    4: { cellWidth: 35, halign: 'right' }
+                };
+            }
         } else {
             // SERAH TERIMA
             tHead = [['#', 'Uraian Pekerjaan / Barang', 'Qty', 'Keterangan']];
