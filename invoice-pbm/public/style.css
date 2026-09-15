@@ -1068,12 +1068,21 @@ th.sortable.active-sort .sort-icon {
     justify-content: space-between;
     gap: 20px;
     padding: 22px 26px;
-    background: var(--surface);
+    background: linear-gradient(135deg, var(--surface) 0%, rgba(99, 102, 241, 0.03) 100%);
     border: 1px solid var(--border);
-    border-radius: 16px;
-    box-shadow: var(--shadow-sm);
+    border-radius: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
     margin-bottom: 24px;
     flex-wrap: wrap;
+    position: relative;
+    overflow: hidden;
+}
+
+.analytics-banner::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; bottom: 0; width: 4px;
+    background: linear-gradient(180deg, #6366f1, #8b5cf6);
 }
 
 .analytics-brand-left {
@@ -1085,6 +1094,7 @@ th.sortable.active-sort .sort-icon {
 .analytics-company-logo {
     height: 72px;
     width: auto;
+    max-width: 180px;
     object-fit: contain;
     padding: 0;
     background: transparent;
@@ -1094,7 +1104,7 @@ th.sortable.active-sort .sort-icon {
 }
 
 .analytics-company-title {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 800;
     color: var(--primary);
     letter-spacing: 1.2px;
@@ -1176,7 +1186,7 @@ th.sortable.active-sort .sort-icon {
     box-shadow: 0 2px 8px rgba(79, 70, 229, 0.35);
 }
 
-/* 6 KPI Cards Grid */
+/* 6 KPI Cards Grid Layout */
 .analytics-kpi-grid-6 {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -1184,40 +1194,75 @@ th.sortable.active-sort .sort-icon {
     margin-bottom: 24px;
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1024px) {
     .analytics-kpi-grid-6 {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
     }
 }
-@media (max-width: 640px) {
+
+@media (max-width: 768px) {
     .analytics-kpi-grid-6 {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
     }
     .analytics-banner {
         flex-direction: column;
-        align-items: flex-start;
-        padding: 16px;
+        align-items: stretch;
+        padding: 18px 20px;
+        gap: 16px;
     }
     .analytics-company-logo {
-        height: 56px;
+        height: 52px;
+    }
+    .analytics-banner h2 {
+        font-size: 17px;
     }
     .analytics-actions-right {
         width: 100%;
         flex-direction: column;
         align-items: stretch;
+        gap: 10px;
     }
     .analytics-filter-range {
         width: 100%;
         display: flex;
+        justify-content: space-between;
     }
     .analytics-range-btn {
         flex: 1;
         text-align: center;
         padding: 8px 4px;
+        font-size: 12px;
     }
     .btn-rekap-pdf {
         width: 100%;
         justify-content: center;
+        padding: 11px;
+    }
+}
+
+@media (max-width: 480px) {
+    .analytics-kpi-grid-6 {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+    .kpi-card-enhanced {
+        padding: 12px 14px !important;
+        gap: 10px !important;
+        border-radius: 12px !important;
+    }
+    .kpi-card-enhanced .stat-icon {
+        width: 36px !important;
+        height: 36px !important;
+        font-size: 14px !important;
+        border-radius: 10px !important;
+    }
+    .kpi-card-enhanced .stat-label {
+        font-size: 11px !important;
+    }
+    .kpi-card-enhanced h4 {
+        font-size: 1.1rem !important;
     }
 }
 
@@ -1227,16 +1272,28 @@ th.sortable.active-sort .sort-icon {
     padding: 18px 20px;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: 16px;
     display: flex;
     align-items: center;
     gap: 16px;
-    box-shadow: var(--shadow-sm);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.02);
     transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 .kpi-card-enhanced:hover {
     transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+}
+
+.kpi-card-enhanced h4 {
+    font-size: clamp(1.15rem, 1.6vw, 1.45rem);
+    font-weight: 800;
+    color: var(--text-main);
+    letter-spacing: -0.5px;
+    margin: 2px 0 0 0;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .kpi-card-accent {
@@ -1302,14 +1359,18 @@ th.sortable.active-sort .sort-icon {
 .chart-card {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: 16px;
     padding: 22px;
-    box-shadow: var(--shadow-sm);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.02);
 }
 
-@media (max-width: 576px) {
+@media (max-width: 640px) {
     .chart-card {
-        padding: 14px;
+        padding: 16px;
+        border-radius: 14px;
+    }
+    .chart-body {
+        height: 230px !important;
     }
 }
 

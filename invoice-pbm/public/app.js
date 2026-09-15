@@ -122,19 +122,80 @@ const ActivityLog = {
         try { return JSON.stringify(snap); } catch { return ''; }
     },
 
-    /** Pulihkan invoice dari snapshot (untuk delete) */
+    /** Pulihkan invoice dari snapshot atau ID */
     async restore(entry) {
-        if (!entry.snapshot) return;
-        try {
-            const data = JSON.parse(entry.snapshot);
-            // Hapus field sistem Appwrite jika ada
-            delete data.$id; delete data.$collectionId; delete data.$databaseId;
-            await API.createInvoice(data);
-            notify(`Invoice ${data.NoInvoice || ''} berhasil dipulihkan!`, 'success');
-            statsData = []; loadInvoices(currentPage);
-        } catch(e) {
-            notify('Gagal memulihkan invoice: ' + e.message, 'error');
+        let invNo = '';
+        if (entry.label) {
+            const match = entry.label.match(/(INV-[^\s]+|SW-[^\s]+|Invoice\s+[^\s]+)/i);
+            if (match) invNo = match[0];
         }
+
+        // 1. Jika log memiliki data snapshot (full data backup)
+        if (entry.snapshot) {
+            try {
+                const data = JSON.parse(entry.snapshot);
+                invNo = data.NoInvoice || invNo || 'Invoice';
+
+                const actionTitle = entry.action === 'edit_invoice' ? 'Kembalikan Versi Invoice' : 'Pulihkan Invoice';
+                const actionMsg = entry.action === 'edit_invoice'
+                    ? `Apakah Anda yakin ingin mengembalikan ${invNo} ke versi sebelum diedit?`
+                    : `Apakah Anda yakin ingin memulihkan data ${invNo} ke database?`;
+
+                const confirmed = await showConfirm(
+                    actionTitle,
+                    actionMsg,
+                    { type: 'warning', confirmText: 'Ya, Pulihkan', icon: 'fa-rotate-left' }
+                );
+                if (!confirmed) return;
+
+                delete data.$id;
+                delete data.$collectionId;
+                delete data.$databaseId;
+                delete data.$createdAt;
+                delete data.$updatedAt;
+
+                let restored = false;
+                if (entry.invoiceId) {
+                    try {
+                        await API.updateInvoice(entry.invoiceId, data);
+                        restored = true;
+                        notify(`Invoice ${invNo} berhasil dikembalikan ke versi sebelumnya!`, 'success');
+                        ActivityLog.add('edit_invoice', `Invoice ${invNo} dipulihkan dari log`, `Klien: ${Array.isArray(data.clientName) ? data.clientName[0] : data.clientName}`);
+                    } catch (err) {}
+                }
+                if (!restored) {
+                    await API.createInvoice(data);
+                    notify(`Invoice ${invNo} berhasil dipulihkan!`, 'success');
+                    ActivityLog.add('create_invoice', `Invoice ${invNo} dipulihkan dari log`, `Klien: ${Array.isArray(data.clientName) ? data.clientName[0] : data.clientName}`);
+                }
+
+                statsData = [];
+                loadInvoices(currentPage);
+                return;
+            } catch (e) {
+                console.error("Gagal parse snapshot log", e);
+            }
+        }
+
+        // 2. Jika snapshot tidak ada (misal log lama sebelum ada snapshot), tetapi invoiceId / data invoice ada di DB
+        if (entry.invoiceId) {
+            const target = currentInvoices.find(v => v.$id === entry.invoiceId) || statsData.find(v => v.$id === entry.invoiceId);
+            if (target) {
+                const confirmed = await showConfirm(
+                    'Buka & Edit Invoice',
+                    `Invoice ${target.NoInvoice || ''} saat ini ada di database. Ingin membuka form edit untuk menyesuaikan datanya?`,
+                    { type: 'warning', confirmText: 'Buka Form Edit', icon: 'fa-pen-to-square' }
+                );
+                if (confirmed) {
+                    toggleActivityPanel(false);
+                    editInvoice(entry.invoiceId);
+                }
+                return;
+            }
+        }
+
+        // 3. Jika snapshot log lama kosong & invoice sudah terhapus permanen
+        notify('Log aktivitas lama ini belum memiliki backup snapshot. Fitur pemulihan otomatis aktif untuk semua aktivitas invoice yang dicatat baru!', 'warning');
     },
 
     /** Ambil dari localStorage cache (cepat, untuk badge) */
@@ -149,15 +210,25 @@ const ActivityLog = {
     },
 
     /** Hapus semua log — dari Appwrite & cache */
-    clear() {
+    async clear() {
+        const confirmed = await showConfirm(
+            'Hapus Riwayat Aktivitas',
+            'Apakah Anda yakin ingin menghapus semua riwayat aktivitas? Tindakan ini tidak dapat dibatalkan.',
+            { type: 'danger', confirmText: 'Ya, Hapus Semua', icon: 'fa-trash-can' }
+        );
+        if (!confirmed) return;
+
         // Hapus dari localStorage cache
         try { localStorage.removeItem(this.KEY); } catch {}
         this._updateBadge([]);
         // Hapus dari Appwrite di background
         const listEl = document.getElementById('activity-list');
-        if (listEl) listEl.innerHTML = `<div class="activity-empty"><i class="fa-solid fa-spinner fa-spin"></i>Menghapus...</div>`;
-        API.clearLogs().then(() => this.render()).catch(() => {
-            if (listEl) listEl.innerHTML = `<div class="activity-empty"><i class="fa-solid fa-box-open"></i>Belum ada riwayat aktivitas</div>`;
+        if (listEl) listEl.innerHTML = `<div class="activity-empty"><i class="fa-solid fa-spinner fa-spin"></i> Menghapus...</div>`;
+        API.clearLogs().then(() => {
+            this.render();
+            if (typeof showToast === 'function') showToast('Riwayat aktivitas berhasil dihapus', 'success');
+        }).catch(() => {
+            if (listEl) listEl.innerHTML = `<div class="activity-empty"><i class="fa-solid fa-box-open"></i> Belum ada riwayat aktivitas</div>`;
         });
     },
 
@@ -281,6 +352,8 @@ const ActivityLog = {
             const avatarBg = this._avatarColor(userName);
             const timeStr  = new Date(entry.ts).toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' });
 
+            const isInvoiceAction = ['delete_invoice', 'edit_invoice'].includes(entry.action);
+
             const item = document.createElement('div');
             item.className = 'activity-item';
             item.innerHTML = `
@@ -294,8 +367,8 @@ const ActivityLog = {
                         <span class="activity-dot">&middot;</span>
                         <span class="activity-time">${this._relativeTime(entry.ts)}</span>
                         <span class="activity-clock">${timeStr}</span>
-                        ${entry.snapshot && entry.action === 'delete_invoice'
-                            ? `<button class="activity-restore-btn" onclick="ActivityLog.restore(${JSON.stringify(entry).replace(/"/g,'&quot;')})" title="Pulihkan invoice ini"><i class="fa-solid fa-rotate-left"></i> Pulihkan</button>`
+                        ${isInvoiceAction
+                            ? `<button class="activity-restore-btn" onclick="ActivityLog.restore(${JSON.stringify(entry).replace(/"/g,'&quot;')})" title="Pulihkan / kembalikan versi invoice ini"><i class="fa-solid fa-rotate-left"></i> Pulihkan</button>`
                             : ''}
                     </div>
                 </div>
@@ -1471,7 +1544,7 @@ document.getElementById('invoice-form').addEventListener('submit', async (e) => 
         const savedClient = Array.isArray(invoiceData.clientName) ? invoiceData.clientName[0] : invoiceData.clientName;
         ActivityLog.add(savedType, savedLabel,
             `Klien: ${savedClient || '-'} | Total: Rp ${(invoiceData.totalAmount||0).toLocaleString('id-ID')}`,
-            { invoiceId: editingId || '', snapshot: prevSnapshot }
+            { invoiceId: editingId || '', snapshot: prevSnapshot || ActivityLog.makeSnapshot(invoiceData) }
         );
 
         editingId = null;
@@ -2623,8 +2696,12 @@ function renderMonthlyBreakdownTable(monthlySummary) {
     const keys = Object.keys(monthlySummary).sort().reverse();
     if (keys.length === 0) {
         tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Belum ada transaksi dalam periode ini</td></tr>';
+        const tfoot = document.getElementById('analytics-monthly-tfoot');
+        if (tfoot) tfoot.innerHTML = '';
         return;
     }
+
+    let gTotal = 0, gNormal = 0, gRental = 0, gPaid = 0, gPending = 0, gCount = 0;
 
     tbody.innerHTML = keys.map(key => {
         const item = monthlySummary[key];
@@ -2633,6 +2710,13 @@ function renderMonthlyBreakdownTable(monthlySummary) {
         if (rate >= 80) badgeClass = 'badge-success';
         else if (rate >= 50) badgeClass = 'badge-warning';
         else badgeClass = 'badge-sewa';
+
+        gTotal += item.total;
+        gNormal += item.normal;
+        gRental += item.rental;
+        gPaid += item.paid;
+        gPending += item.pending;
+        gCount += item.count;
 
         return `
             <tr>
@@ -2646,6 +2730,30 @@ function renderMonthlyBreakdownTable(monthlySummary) {
             </tr>
         `;
     }).join('');
+
+    const gRate = gTotal > 0 ? Math.round((gPaid / gTotal) * 100) : 0;
+    let gBadgeClass = gRate >= 80 ? 'badge-success' : (gRate >= 50 ? 'badge-warning' : 'badge-sewa');
+
+    let tfoot = document.getElementById('analytics-monthly-tfoot');
+    const table = tbody.closest('table');
+    if (table) {
+        if (!tfoot) {
+            tfoot = document.createElement('tfoot');
+            tfoot.id = 'analytics-monthly-tfoot';
+            table.appendChild(tfoot);
+        }
+        tfoot.innerHTML = `
+            <tr style="background: var(--surface-hover); font-weight:700; border-top: 2px solid var(--border);">
+                <td><strong>TOTAL KESELURUHAN</strong></td>
+                <td><strong>Rp ${gTotal.toLocaleString('id-ID')}</strong> <small class="text-muted">(${gCount})</small></td>
+                <td>Rp ${gNormal.toLocaleString('id-ID')}</td>
+                <td>Rp ${gRental.toLocaleString('id-ID')}</td>
+                <td style="color:#059669; font-weight:700;">Rp ${gPaid.toLocaleString('id-ID')}</td>
+                <td style="color:#dc2626; font-weight:700;">Rp ${gPending.toLocaleString('id-ID')}</td>
+                <td><span class="badge ${gBadgeClass}">${gRate}% Overall</span></td>
+            </tr>
+        `;
+    }
 }
 
 // Download Summary Rekap as PDF
