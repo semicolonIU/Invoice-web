@@ -1083,14 +1083,14 @@ th.sortable.active-sort .sort-icon {
 }
 
 .analytics-company-logo {
-    height: 52px;
+    height: 72px;
     width: auto;
     object-fit: contain;
-    border-radius: 10px;
-    padding: 4px;
-    background: #ffffff;
-    border: 1px solid var(--border);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    padding: 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.08));
 }
 
 .analytics-company-title {
@@ -1199,7 +1199,7 @@ th.sortable.active-sort .sort-icon {
         padding: 16px;
     }
     .analytics-company-logo {
-        height: 42px;
+        height: 56px;
     }
     .analytics-actions-right {
         width: 100%;
@@ -1908,3 +1908,69 @@ th.sortable.active-sort .sort-icon {
         justify-content: center;
     }
 }
+
+/* ══════════════════════════════════════════════════════
+   MOBILE FLOATING ACTION BUTTON (FAB) & FORM STATUS BADGE
+   ══════════════════════════════════════════════════════ */
+.mobile-fab {
+    display: none;
+}
+
+.form-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+    transition: all 0.2s ease;
+}
+.form-status-badge.badge-create {
+    background: rgba(16, 185, 129, 0.12);
+    color: #059669;
+    border: 1px solid rgba(16, 185, 129, 0.25);
+}
+.form-status-badge.badge-edit {
+    background: rgba(245, 158, 11, 0.15);
+    color: #d97706;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+@media (max-width: 768px) {
+    .mobile-fab {
+        position: fixed;
+        bottom: 24px;
+        right: 20px;
+        z-index: 999;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 22px;
+        border-radius: 50px;
+        background: linear-gradient(135deg, var(--primary), #4f46e5);
+        color: #ffffff;
+        border: none;
+        font-weight: 700;
+        font-size: 14px;
+        box-shadow: 0 10px 25px rgba(79, 70, 229, 0.45);
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .mobile-fab:active {
+        transform: scale(0.94);
+        box-shadow: 0 4px 14px rgba(79, 70, 229, 0.3);
+    }
+    .mobile-fab i {
+        font-size: 16px;
+    }
+    .form-status-badge {
+        width: 100%;
+        justify-content: center;
+        padding: 8px 14px;
+        font-size: 13px;
+        margin-top: 4px;
+    }
+}
+

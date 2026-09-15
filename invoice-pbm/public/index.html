@@ -139,7 +139,7 @@
                         <div class="kpi-card-accent bg-amber"></div>
                         <div class="stat-icon kpi-icon-orange"><i class="fa-solid fa-clock-rotate-left"></i></div>
                         <div class="stat-info">
-                            <span class="stat-label">Piutang (Pending)</span>
+                            <span class="stat-label">Belum Lunas (Piutang)</span>
                             <h4 id="stat-pending-total">Rp 0</h4>
                             <p id="stat-pending-count" class="kpi-subtext">0 Invoice</p>
                         </div>
@@ -280,7 +280,7 @@
                         <div class="stat-info">
                             <span class="stat-label">Belum Lunas (Piutang)</span>
                             <h4 id="analytics-kpi-total-pending">Rp 0</h4>
-                            <span id="analytics-kpi-pending-count" class="kpi-subtext">0 invoice pending</span>
+                            <span id="analytics-kpi-pending-count" class="kpi-subtext">0 invoice belum lunas</span>
                         </div>
                     </div>
 
@@ -397,7 +397,10 @@
             <div id="view-create" class="view-section" style="display:none;">
                 <div class="controls-bar">
                     <div class="form-title-wrapper">
-                        <h3 id="form-title">Formulir Invoice Baru</h3>
+                        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                            <h3 id="form-title">Formulir Invoice Baru</h3>
+                            <span id="form-status-badge" class="form-status-badge badge-create"><i class="fa-solid fa-plus-circle"></i> Buat Baru</span>
+                        </div>
                         <div class="form-type-switch" role="group" aria-label="Tipe Invoice">
                             <button type="button" class="switch-btn active" id="switch-type-normal" onclick="setFormType('normal')">
                                 <i class="fa-solid fa-file-invoice"></i> Invoice Reguler
@@ -565,6 +568,11 @@
             </div>
         </div>
     </div>
+
+    <!-- Mobile Floating Action Button (only visible on mobile) -->
+    <button class="mobile-fab" id="mobile-fab-create" onclick="showCreate('normal')" title="Buat Invoice Baru">
+        <i class="fa-solid fa-plus"></i> Invoice Baru
+    </button>
 
     <script src="appwrite.js"></script>
     <script src="pdf.js"></script>

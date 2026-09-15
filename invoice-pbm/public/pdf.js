@@ -1,4 +1,4 @@
-// Helper: load image as base64 for jsPDF (Fail-safe with timeout)
+// Helper: load image as base64 for jsPDF (Fail-safe with aspect ratio metadata)
 function loadImageAsBase64(url) {
     return new Promise((resolve) => {
         if (!url) return resolve(null);
@@ -22,7 +22,14 @@ function loadImageAsBase64(url) {
                 canvas.height = img.height || 100;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0);
-                safeResolve(canvas.toDataURL('image/png'));
+                const dataUrl = canvas.toDataURL('image/png');
+
+                const res = new String(dataUrl);
+                res.dataUrl = dataUrl;
+                res.width = img.width || 200;
+                res.height = img.height || 100;
+                res.aspect = (res.height > 0) ? (res.width / res.height) : 1;
+                safeResolve(res);
             } catch (e) {
                 console.warn('Gagal men-convert logo ke base64:', e);
                 safeResolve(null);
@@ -167,7 +174,16 @@ window.generatePDF = async function (invoiceData, action = 'download') {
         doc.line(marginL, 40.5, pageW - marginR, 40.5);
 
         if (logoBase64) {
-            doc.addImage(logoBase64, 'PNG', marginL, 6, 26, 34);
+            const dataUrl = logoBase64.dataUrl || String(logoBase64);
+            const aspect = (logoBase64.aspect && logoBase64.aspect > 0) ? logoBase64.aspect : 1;
+            let lH = 30;
+            let lW = lH * aspect;
+            if (lW > 44) {
+                lW = 44;
+                lH = lW / aspect;
+            }
+            const lY = 4 + (32 - lH) / 2;
+            doc.addImage(dataUrl, 'PNG', marginL, lY, lW, lH);
         } else {
             doc.setFillColor(220, 220, 220);
             doc.roundedRect(marginL, 6, 24, 32, 3, 3, 'F');

@@ -348,6 +348,10 @@ function switchView(viewName) {
     if (views[viewName]) views[viewName].style.display = 'block';
     if (navs[viewName]) navs[viewName].classList.add('active');
     closeMobileSidebar();
+
+    // Toggle Mobile FAB (only visible on dashboard view)
+    const fab = document.getElementById('mobile-fab-create');
+    if (fab) fab.style.display = viewName === 'dashboard' ? '' : 'none';
 }
 
 document.getElementById('nav-dashboard').addEventListener('click', () => { switchView('dashboard'); loadInvoices(1); });
@@ -365,6 +369,13 @@ function showCreate(type = 'normal') {
     closeMobileSidebar();
     window.setFormType(type);
     document.getElementById('submit-btn').innerHTML = '<i class="fa-solid fa-save"></i> Simpan ke Appwrite';
+
+    // Update form status badge
+    const badge = document.getElementById('form-status-badge');
+    if (badge) {
+        badge.className = 'form-status-badge badge-create';
+        badge.innerHTML = '<i class="fa-solid fa-plus-circle"></i> Buat Baru';
+    }
 }
 
 window.setFormType = function(type) {
@@ -615,6 +626,11 @@ function notify(message, type = 'info', duration) {
     // Public wrapper for toast notifications; can be extended later.
     return _showToast(message, type, duration);
 }
+
+function showToast(message, type = 'info', duration) {
+    return _showToast(message, type, duration);
+}
+window.showToast = showToast;
 
 function dismissToast(el) {
     if (!el || el.classList.contains('toast-exit')) return;
@@ -1249,9 +1265,9 @@ function renderInvoiceTable(docs) {
             <td style="font-weight:600; color:var(--text-main)">Rp ${Number(invoice.totalAmount).toLocaleString('id-ID')}</td>
             <td>
                 <select class="status-select" onchange="updatePaymentStatus('${invoice.$id}', this.value)" style="padding: 4px; border-radius: 4px; border: 1px solid var(--border); background: var(--surface); color: var(--text-main);">
-                    <option value="pending" ${invoice.paymentStatus === 'pending' ? 'selected' : ''}>Pending</option>
-                    <option value="paid" ${invoice.paymentStatus === 'paid' ? 'selected' : ''}>Paid</option>
-                    <option value="overdue" ${invoice.paymentStatus === 'overdue' ? 'selected' : ''}>Overdue</option>
+                    <option value="pending" ${invoice.paymentStatus === 'pending' ? 'selected' : ''}>Belum Lunas</option>
+                    <option value="paid" ${invoice.paymentStatus === 'paid' ? 'selected' : ''}>Lunas</option>
+                    <option value="overdue" ${invoice.paymentStatus === 'overdue' ? 'selected' : ''}>Jatuh Tempo</option>
                 </select>
             </td>
             <td class="action-cell">
@@ -1532,6 +1548,13 @@ window.editInvoice = function(id) {
     editingId = id; // re-set because showCreate resets it
     window.setFormType(invType);
     document.getElementById('submit-btn').innerHTML = '<i class="fa-solid fa-save"></i> Perbarui Invoice';
+
+    // Update form status badge to edit mode
+    const badge = document.getElementById('form-status-badge');
+    if (badge) {
+        badge.className = 'form-status-badge badge-edit';
+        badge.innerHTML = '<i class="fa-solid fa-pen-to-square"></i> Edit Invoice';
+    }
 
     // Populate common data
     document.getElementById('inv-notes').value = savedNotes;
@@ -2413,7 +2436,7 @@ function renderRevenueTrendChart(docs, monthsToShow = 6) {
                     hoverBackgroundColor: '#059669'
                 },
                 {
-                    label: 'Nominal Pending (Rp)',
+                    label: 'Nominal Belum Lunas (Rp)',
                     data: monthlyPending,
                     backgroundColor: '#f59e0b',
                     borderRadius: 6,
@@ -2507,7 +2530,7 @@ function renderPaymentDonutChart(paymentCounts) {
     paymentChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: ['Lunas (Paid)', 'Menunggu (Pending)', 'Jatuh Tempo (Overdue)'],
+            labels: ['Lunas', 'Belum Lunas', 'Jatuh Tempo'],
             datasets: [{
                 data: [paymentCounts.paid, paymentCounts.pending, paymentCounts.overdue],
                 backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
@@ -2626,7 +2649,7 @@ function renderMonthlyBreakdownTable(monthlySummary) {
 }
 
 // Download Summary Rekap as PDF
-window.downloadAnalyticsPDF = async function() {
+async function downloadAnalyticsPDF() {
     console.log('Menjalankan downloadAnalyticsPDF...');
 
     const jsPDFClass = (window.jspdf && window.jspdf.jsPDF) ? window.jspdf.jsPDF : (window.jsPDF || null);
@@ -2704,27 +2727,43 @@ window.downloadAnalyticsPDF = async function() {
             else monthlySummary[monthKey].pending += amount;
         });
 
-        // 1. Header Banner PDF
+        // 1. Header Banner PDF with enlarged proportional logo sizing
+        let startX = 15;
         if (logoBase64) {
+            const dataUrl = logoBase64.dataUrl || String(logoBase64);
+            const aspect = (logoBase64.aspect && logoBase64.aspect > 0) ? logoBase64.aspect : 1;
+
+            // Target max height = 22mm, max width = 42mm for clear visibility
+            let logoH = 22;
+            let logoW = logoH * aspect;
+            if (logoW > 42) {
+                logoW = 42;
+                logoH = logoW / aspect;
+            }
+            const logoY = 8 + (24 - logoH) / 2; // Center vertically in 24mm header block
+
             try {
-                doc.addImage(logoBase64, 'PNG', 15, 12, 38, 16);
-            } catch(e) { console.warn('Could not render logo in PDF', e); }
+                doc.addImage(dataUrl, 'PNG', 15, logoY, logoW, logoH);
+                startX = 15 + logoW + 8; // 8mm gap after logo
+            } catch(e) {
+                console.warn('Could not render logo in PDF', e);
+                startX = 15;
+            }
         }
 
-        const startX = logoBase64 ? 58 : 15;
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(14);
         doc.setTextColor(30, 41, 59);
-        doc.text('PT PUTRA BANUA MANDIRI', startX, 18);
+        doc.text('PT PUTRA BANUA MANDIRI', startX, 17);
 
-        doc.setFontSize(10);
+        doc.setFontSize(9.5);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(100, 116, 139);
         doc.text('REKAPITULASI ANALITIK & LAPORAN KEUANGAN BISNIS', startX, 24);
 
         doc.setDrawColor(226, 232, 240);
         doc.setLineWidth(0.5);
-        doc.line(15, 32, 195, 32);
+        doc.line(15, 34, 195, 34);
 
         // 2. Report Meta Box
         doc.setFillColor(248, 250, 252);
@@ -2765,7 +2804,7 @@ window.downloadAnalyticsPDF = async function() {
             body: [
                 ['Total Omset Tagihan', `Rp ${totalOmset.toLocaleString('id-ID')}`, `${docs.length} total invoice`],
                 ['Total Pendapatan Terbayar (Lunas)', `Rp ${totalPaid.toLocaleString('id-ID')}`, `${paidCount} invoice lunas`],
-                ['Total Sisa Piutang (Pending/Overdue)', `Rp ${totalPending.toLocaleString('id-ID')}`, `${pendingCount} invoice belum lunas`],
+                ['Total Sisa Piutang (Belum Lunas/Jatuh Tempo)', `Rp ${totalPending.toLocaleString('id-ID')}`, `${pendingCount} invoice belum lunas`],
                 ['Tingkat Pelunasan (Collection Rate)', `${docs.length > 0 ? Math.round((paidCount / docs.length) * 100) : 0}%`, `${paidCount} dari ${docs.length} lunas`],
                 ['Komposisi Tipe Transaksi', `${normalCount} Reguler / ${rentalCount} Sewa`, 'Distribusi tipe tagihan'],
                 ['Total Pelanggan Aktif', `${Object.keys(clientTotals).length} Pelanggan`, 'Mitra bisnis terdaftar']
@@ -2853,5 +2892,6 @@ window.downloadAnalyticsPDF = async function() {
         console.error('Error generating analytics PDF:', err);
         showToast('Gagal memproses Rekap PDF: ' + err.message, 'error');
     }
-};
+}
+window.downloadAnalyticsPDF = downloadAnalyticsPDF;
 
