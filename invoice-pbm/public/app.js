@@ -195,7 +195,7 @@ window.calculateTotal = function() {
 window.roundTotal = function() {
     const rows = document.querySelectorAll('.item-row');
     if (rows.length === 0) {
-        showToast('Tidak ada item untuk dibulatkan.', 'warning');
+        notify('Tidak ada item untuk dibulatkan.', 'warning');
         return;
     }
 
@@ -210,7 +210,7 @@ window.roundTotal = function() {
     const diff = rounded - total;
 
     if (diff === 0) {
-        showToast('Total sudah bulat (kelipatan Rp 1.000).', 'info');
+        notify('Total sudah bulat (kelipatan Rp 1.000).', 'info');
         return;
     }
 
@@ -222,7 +222,7 @@ window.roundTotal = function() {
     lastRow.querySelector('.item-price').value = Math.round(lastPrice + adjustment);
 
     calculateTotal();
-    showToast(`Total dibulatkan ke Rp ${rounded.toLocaleString('id-ID')} (selisih Rp ${Math.abs(diff).toLocaleString('id-ID')})`, 'success');
+    notify(`Total dibulatkan ke Rp ${rounded.toLocaleString('id-ID')} (selisih Rp ${Math.abs(diff).toLocaleString('id-ID')})`, 'success');
 }
 
 window.handleItemSelect = function(element) {
@@ -275,7 +275,45 @@ const TOAST_DURATIONS = {
  * @param {'success'|'error'|'warning'|'info'} type - Tipe toast
  * @param {number} [duration] - Durasi ms (opsional, default sesuai tipe)
  */
-function showToast(message, type = 'info', duration) {
+function _showToast(message, type = 'info', duration) {
+    // Internal toast implementation
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const ms = duration || TOAST_DURATIONS[type] || 4000;
+    const toast = document.createElement('div');
+    toast.className = `toast-item toast-${type}`;
+    toast.innerHTML = `
+        <div class="toast-icon"><i class="fa-solid ${TOAST_ICONS[type]}"></i></div>
+        <div class="toast-body">
+            <div class="toast-title">${TOAST_TITLES[type]}</div>
+            <div class="toast-message">${message}</div>
+        </div>
+        <button class="toast-close-btn" title="Tutup"><i class="fa-solid fa-xmark"></i></button>
+        <div class="toast-progress" style="animation-duration: ${ms}ms;"></div>
+    `;
+    toast.querySelector('.toast-close-btn').onclick = () => dismissToast(toast);
+    container.appendChild(toast);
+    const timer = setTimeout(() => dismissToast(toast), ms);
+    toast._timer = timer;
+    toast.addEventListener('mouseenter', () => {
+        clearTimeout(toast._timer);
+        const prog = toast.querySelector('.toast-progress');
+        if (prog) prog.style.animationPlayState = 'paused';
+    });
+    toast.addEventListener('mouseleave', () => {
+        const prog = toast.querySelector('.toast-progress');
+        if (prog) prog.style.animationPlayState = 'running';
+        toast._timer = setTimeout(() => dismissToast(toast), 2000);
+    });
+    const all = container.querySelectorAll('.toast-item:not(.toast-exit)');
+    if (all.length > 5) dismissToast(all[0]);
+    return toast;
+}
+
+function notify(message, type = 'info', duration) {
+    // Public wrapper for toast notifications; can be extended later.
+    return _showToast(message, type, duration);
+}
     const container = document.getElementById('toast-container');
     if (!container) return;
 
@@ -502,7 +540,7 @@ function renderNotifications() {
         // Klik body item → buka dashboard
         item.onclick = (e) => {
             if (e.target.closest('.notif-dismiss-btn')) return;
-            showDashboard();
+            openRentalForm(n);
             toggleNotifPanel(false);
         };
         listEl.appendChild(item);
@@ -520,6 +558,29 @@ window.toggleNotifPanel = function(forceState) {
         panel.classList.remove('open');
     }
 };
+
+// Open the rental invoice creation form pre‑filled based on a notification
+function openRentalForm(notif) {
+    // Switch to the create view in rental mode
+    showCreate('rental');
+
+    // Pre‑select client if the select element exists
+    const clientSelect = document.getElementById('client-name-select');
+    if (clientSelect) {
+        clientSelect.value = notif.clientName || '';
+        // Trigger change to load related info (address, site, PO)
+        clientSelect.dispatchEvent(new Event('change'));
+    }
+
+    // Optionally add a note indicating renewal for the current month
+    const notesEl = document.getElementById('inv-notes');
+    if (notesEl) {
+        const now = new Date();
+        const monthYear = now.toLocaleString('default', { month: 'long', year: 'numeric' });
+        notesEl.value = `Perpanjangan sewa untuk ${monthYear}`;
+    }
+}
+
 
 window.dismissNotification = function(id) {
     const notif = notifications.find(n => n.id === id);
@@ -994,13 +1055,13 @@ document.getElementById('invoice-form').addEventListener('submit', async (e) => 
             console.error("Gagal memproses Webhook", e);
         }
 
-        showToast(editingId ? 'Invoice berhasil diperbarui!' : 'Invoice berhasil direkam!', 'success');
+        notify(editingId ? 'Invoice berhasil diperbarui!' : 'Invoice berhasil direkam!', 'success');
 
         editingId = null;
         statsData = []; // Reset stats cache to force reload
         showDashboard();
     } catch (e) {
-        showToast('Gagal menyimpan ke Appwrite: ' + e.message, 'error');
+        notify('Gagal menyimpan ke Appwrite: ' + e.message, 'error');
     } finally {
         const resetText = editingId ? 'Perbarui Invoice' : 'Simpan ke Appwrite';
         btn.innerHTML = `<i class="fa-solid fa-save"></i> ${resetText}`;
@@ -1225,11 +1286,11 @@ window.deleteInvoice = async function(id) {
     if(confirmed) {
         try {
             await API.deleteInvoice(id);
-            showToast('Invoice berhasil dihapus', 'success');
+            notify('Invoice berhasil dihapus', 'success');
             statsData = [];
             loadInvoices(currentPage);
         } catch(e) {
-            showToast('Gagal menghapus: ' + e.message, 'error');
+            notify('Gagal menghapus: ' + e.message, 'error');
         }
     }
 }
@@ -1237,9 +1298,9 @@ window.deleteInvoice = async function(id) {
 window.updatePaymentStatus = async function(id, newStatus) {
     try {
         await API.updateInvoiceStatus(id, newStatus);
-        showToast('Status pembayaran diperbarui', 'success');
+        notify('Status pembayaran diperbarui', 'success');
     } catch (e) {
-        showToast('Gagal mengupdate status: ' + e.message, 'error');
+        notify('Gagal mengupdate status: ' + e.message, 'error');
         loadInvoices(); // reload to reset the select to previous state
     }
 }
@@ -1256,10 +1317,10 @@ window.downloadPDF = async function(id) {
             }
         } catch (e) {
             console.error("Download PDF Error:", e);
-            showToast('Gagal mengunduh PDF: ' + e.message, 'error');
+            notify('Gagal mengunduh PDF: ' + e.message, 'error');
         }
     } else {
-        showToast('Data invoice tidak ditemukan.', 'warning');
+        notify('Data invoice tidak ditemukan.', 'warning');
     }
 }
 
@@ -1284,12 +1345,12 @@ window.nativeShare = async function(id) {
                 updatePaymentStatus(id, 'paid');
             }
         } else {
-            showToast('Browser/Ponsel Anda tidak mendukung share file PDF. Mengunduh file...', 'warning');
+            notify('Browser/Ponsel Anda tidak mendukung share file PDF. Mengunduh file...', 'warning');
             await window.generatePDF(invoice, 'download');
         }
     } catch (e) {
         if (e.name !== 'AbortError') {
-            showToast('Gagal membagikan dokumen: ' + e.message, 'error');
+            notify('Gagal membagikan dokumen: ' + e.message, 'error');
         }
     }
 }
@@ -1326,7 +1387,7 @@ window.previewInvoice = async function() {
             document.getElementById('preview-modal').style.display = 'flex';
         }
     } catch (e) {
-        showToast('Gagal membuat pratinjau: ' + e.message, 'error');
+        notify('Gagal membuat pratinjau: ' + e.message, 'error');
     } finally {
         btn.innerHTML = originalText;
         btn.disabled = false;
@@ -1388,7 +1449,7 @@ window.handleLogout = async function() {
             await API.logout();
             window.location.reload();
         } catch (e) {
-            showToast('Gagal logout: ' + e.message, 'error');
+            notify('Gagal logout: ' + e.message, 'error');
         }
     }
 };
@@ -1650,7 +1711,7 @@ window.handlePdfScan = async function(input) {
             calculateTotal();
         }
 
-        showToast('AI berhasil mengekstrak data! Silakan tinjau kembali sebelum menyimpan.', 'success');
+        notify('AI berhasil mengekstrak data! Silakan tinjau kembali sebelum menyimpan.', 'success');
 
     } catch (error) {
         console.error('Scan Error:', error);
@@ -1662,7 +1723,7 @@ window.handlePdfScan = async function(input) {
             errorMsg = "Gemini AI terlalu banyak permintaan. Tunggu 30 detik dan coba lagi.";
         }
         
-        showToast(errorMsg, 'error', 8000);
+        notify(errorMsg, 'error', 8000);
     } finally {
         progressTimeouts.forEach(clearTimeout);
         overlay.style.display = 'none';

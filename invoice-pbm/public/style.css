@@ -279,8 +279,25 @@ textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79, 70
 .item-row .qty-col { width: 100px; }
 .item-row .price-col { width: 180px; }
 
-.total-section { text-align: right; padding: 24px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); margin-bottom: 24px; background: var(--bg-color); border-radius: 8px; padding-right: 24px;}
-.total-section h3 { font-size: 24px; font-weight: 700; color: var(--primary); }
+.total-section {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    padding: 24px 0;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+    background: var(--bg-color);
+    border-radius: 8px;
+    text-align: center;
+}
+.total-section h3 {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--primary);
+}
+
 
 .form-actions { display: flex; justify-content: flex-end; gap: 16px; }
 
