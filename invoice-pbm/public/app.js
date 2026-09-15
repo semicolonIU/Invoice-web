@@ -314,47 +314,6 @@ function notify(message, type = 'info', duration) {
     // Public wrapper for toast notifications; can be extended later.
     return _showToast(message, type, duration);
 }
-    const container = document.getElementById('toast-container');
-    if (!container) return;
-
-    const ms = duration || TOAST_DURATIONS[type] || 4000;
-    const toast = document.createElement('div');
-    toast.className = `toast-item toast-${type}`;
-    toast.innerHTML = `
-        <div class="toast-icon"><i class="fa-solid ${TOAST_ICONS[type]}"></i></div>
-        <div class="toast-body">
-            <div class="toast-title">${TOAST_TITLES[type]}</div>
-            <div class="toast-message">${message}</div>
-        </div>
-        <button class="toast-close-btn" title="Tutup"><i class="fa-solid fa-xmark"></i></button>
-        <div class="toast-progress" style="animation-duration: ${ms}ms;"></div>
-    `;
-
-    // Close button
-    toast.querySelector('.toast-close-btn').onclick = () => dismissToast(toast);
-
-    container.appendChild(toast);
-
-    // Auto dismiss
-    const timer = setTimeout(() => dismissToast(toast), ms);
-    toast._timer = timer;
-
-    // Pause progress on hover
-    toast.addEventListener('mouseenter', () => {
-        clearTimeout(toast._timer);
-        const prog = toast.querySelector('.toast-progress');
-        if (prog) prog.style.animationPlayState = 'paused';
-    });
-    toast.addEventListener('mouseleave', () => {
-        const prog = toast.querySelector('.toast-progress');
-        if (prog) prog.style.animationPlayState = 'running';
-        toast._timer = setTimeout(() => dismissToast(toast), 2000);
-    });
-
-    // Limit max visible toasts
-    const all = container.querySelectorAll('.toast-item:not(.toast-exit)');
-    if (all.length > 5) dismissToast(all[0]);
-}
 
 function dismissToast(el) {
     if (!el || el.classList.contains('toast-exit')) return;
@@ -561,23 +520,112 @@ window.toggleNotifPanel = function(forceState) {
 
 // Open the rental invoice creation form pre‑filled based on a notification
 function openRentalForm(notif) {
-    // Switch to the create view in rental mode
-    showCreate('rental');
+    // Cari invoice asli dari cache statsData atau currentInvoices
+    const invoice = (statsData.length > 0 ? statsData : currentInvoices).find(v => v.$id === notif.invoiceId);
 
-    // Pre‑select client if the select element exists
-    const clientSelect = document.getElementById('client-name-select');
-    if (clientSelect) {
-        clientSelect.value = notif.clientName || '';
-        // Trigger change to load related info (address, site, PO)
-        clientSelect.dispatchEvent(new Event('change'));
-    }
+    if (invoice) {
+        // Gunakan createRentalForThisMonth yang sudah lengkap pre-fill semua field
+        // tapi karena fungsi itu cari dari currentInvoices, kita lakukan inline di sini
+        // agar bisa cari dari statsData juga
 
-    // Optionally add a note indicating renewal for the current month
-    const notesEl = document.getElementById('inv-notes');
-    if (notesEl) {
+        let savedNotes = '';
+        let itemsArray = [];
+        let descArr    = [];
+        let flags      = { showInv: true, showPo: true, showSite: true, showDate: true };
+
+        try {
+            const itemObj = typeof invoice.items === 'string' ? JSON.parse(invoice.items) : invoice.items;
+            const noteObj = invoice.note ? (typeof invoice.note === 'string' ? JSON.parse(invoice.note) : invoice.note) : null;
+
+            if (noteObj) {
+                savedNotes = noteObj.notes || '';
+                descArr    = noteObj.desc  || [];
+                flags      = noteObj.flags || flags;
+                itemsArray = Array.isArray(itemObj) ? itemObj : [];
+            } else {
+                savedNotes = itemObj?.notes || '';
+                flags      = itemObj?.flags || flags;
+                itemsArray = itemObj?.itemList || (Array.isArray(itemObj) ? itemObj : []);
+            }
+        } catch(e) {}
+
+        // Buka form sewa (mode buat baru, bukan edit)
+        showCreate('rental');
+        document.getElementById('form-title').textContent = 'Buat Invoice Sewa (Bulan Ini)';
+
+        // Isi data klien & catatan dari invoice asli
+        document.getElementById('inv-client').value = (Array.isArray(invoice.clientName) ? invoice.clientName[0] : invoice.clientName) || '';
+        document.getElementById('inv-wa').value     = invoice.clientAddress || '';
+        document.getElementById('inv-po').value     = invoice.noPo  || '';
+        document.getElementById('inv-site').value   = invoice.site  || '';
+        document.getElementById('inv-notes').value  = savedNotes;
+
+        // Terapkan flags tampilan
+        if (document.getElementById('chk-show-inv'))  document.getElementById('chk-show-inv').checked  = (flags.showInv  !== false);
+        if (document.getElementById('chk-show-po'))   document.getElementById('chk-show-po').checked   = (flags.showPo   !== false);
+        if (document.getElementById('chk-show-site')) document.getElementById('chk-show-site').checked = (flags.showSite !== false);
+        if (document.getElementById('chk-show-date')) document.getElementById('chk-show-date').checked = (flags.showDate !== false);
+        if (document.getElementById('chk-show-tbbg')) document.getElementById('chk-show-tbbg').checked = (flags.showTbBg !== false);
+
+        // Hitung tanggal bulan ini (gunakan hari awal dari invoice asli)
+        const now      = new Date();
+        const curYear  = now.getFullYear();
+        const curMonth = now.getMonth();
+
+        let originalDay = 1;
+        try {
+            const noteObj = invoice.note ? (typeof invoice.note === 'string' ? JSON.parse(invoice.note) : invoice.note) : null;
+            if (noteObj?.rental?.awal) {
+                const origDate = new Date(noteObj.rental.awal);
+                if (!isNaN(origDate.getTime())) originalDay = origDate.getDate();
+            }
+        } catch(e) {}
+
+        const maxDays   = new Date(curYear, curMonth + 1, 0).getDate();
+        const startDay  = Math.min(originalDay, maxDays);
+        const startDate = new Date(curYear, curMonth, startDay);
+        const endDate   = new Date(curYear, curMonth + 1, startDay);
+
+        const formatISO = d => {
+            const y   = d.getFullYear();
+            const m   = (d.getMonth() + 1).toString().padStart(2, '0');
+            const day = d.getDate().toString().padStart(2, '0');
+            return `${y}-${m}-${day}`;
+        };
+
+        // Tanggal invoice = hari ini; tanggal sewa = bulan ini
+        document.getElementById('inv-date').value   = formatISO(now);
+        document.getElementById('sewa-awal').value  = formatISO(startDate);
+        document.getElementById('sewa-akhir').value = formatISO(endDate);
+
+        // Isi item dari invoice asli
+        document.getElementById('items-container').innerHTML = '';
+        itemCount = 0;
+
+        if (itemsArray.length > 0) {
+            itemsArray.forEach((item, idx) => {
+                itemCount++;
+                const row = createItemRow(itemCount);
+                row.querySelector('.item-name').value  = item.name  || '';
+                row.querySelector('.item-qty').value   = item.qty   || 1;
+                row.querySelector('.item-price').value = item.price || 0;
+                const descVal = descArr[idx] !== undefined ? descArr[idx] : (item.desc || '');
+                if (row.querySelector('.item-desc')) row.querySelector('.item-desc').value = descVal;
+                document.getElementById('items-container').appendChild(row);
+            });
+        } else {
+            addItemRow();
+        }
+
+        calculateTotal();
+
+    } else {
+        // Fallback jika invoice tidak ditemukan di cache: buka form kosong dengan nama klien
+        showCreate('rental');
+        document.getElementById('inv-client').value = notif.clientName || '';
         const now = new Date();
-        const monthYear = now.toLocaleString('default', { month: 'long', year: 'numeric' });
-        notesEl.value = `Perpanjangan sewa untuk ${monthYear}`;
+        const monthYear = now.toLocaleString('id-ID', { month: 'long', year: 'numeric' });
+        document.getElementById('inv-notes').value = `Perpanjangan sewa untuk ${monthYear}`;
     }
 }
 
