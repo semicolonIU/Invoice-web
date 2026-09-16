@@ -829,13 +829,14 @@ function checkRentalNotifications(docs) {
                 level,
                 icon,
                 label,
+                createdTs: new Date(inv.date || inv.$createdAt || Date.now()).getTime(),
                 dismissed: notifDismissed.includes(key)
             });
         } catch(e) {}
     });
 
-    // Urutkan: paling dekat / sudah lewat duluan
-    newNotifs.sort((a, b) => a.diffDays - b.diffDays);
+    // Urutkan: sewa terbaru (paling baru dibuat/diisikan) berada di paling atas
+    newNotifs.sort((a, b) => b.createdTs - a.createdTs);
     notifications = newNotifs;
     renderNotifications();
 }
@@ -1337,7 +1338,7 @@ function renderInvoiceTable(docs) {
             <td>${new Date(invoice.date).toLocaleDateString('id-ID')}</td>
             <td style="font-weight:600; color:var(--text-main)">Rp ${Number(invoice.totalAmount).toLocaleString('id-ID')}</td>
             <td>
-                <select class="status-select" onchange="updatePaymentStatus('${invoice.$id}', this.value)" style="padding: 4px; border-radius: 4px; border: 1px solid var(--border); background: var(--surface); color: var(--text-main);">
+                <select class="status-select status-${invoice.paymentStatus || 'pending'}" onchange="updatePaymentStatus('${invoice.$id}', this.value); this.className='status-select status-'+this.value;">
                     <option value="pending" ${invoice.paymentStatus === 'pending' ? 'selected' : ''}>Belum Lunas</option>
                     <option value="paid" ${invoice.paymentStatus === 'paid' ? 'selected' : ''}>Lunas</option>
                     <option value="overdue" ${invoice.paymentStatus === 'overdue' ? 'selected' : ''}>Jatuh Tempo</option>

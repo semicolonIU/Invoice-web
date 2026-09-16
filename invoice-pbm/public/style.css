@@ -409,9 +409,8 @@ textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79, 70
     .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     table { min-width: 100%; border-radius: 8px; }
     
-    /* Hide Address (3rd) and Status (6th) columns on mobile */
-    th:nth-child(3), td:nth-child(3),
-    th:nth-child(6), td:nth-child(6) { 
+    /* Hide Keterangan Item (3rd column) on mobile to save space, but KEEP Status (6th) visible! */
+    th:nth-child(3), td:nth-child(3) { 
         display: none; 
     }
     
@@ -1494,48 +1493,80 @@ th.sortable.active-sort .sort-icon {
     gap: 10px;
 }
 
-.new-client-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px 14px;
-    background: var(--bg-color);
+/* Status Select Dropdown Styling & Badges */
+.status-select {
+    padding: 4px 8px;
+    border-radius: 6px;
     border: 1px solid var(--border);
-    border-radius: 10px;
-    gap: 8px;
+    background: var(--surface);
+    color: var(--text-main);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    outline: none;
 }
-
-.new-client-details {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-width: 0;
-}
-
-.badge-new-client {
+.status-select.status-paid, .status-select[data-status="paid"] {
     background: rgba(16, 185, 129, 0.12);
     color: #059669;
-    border: 1px solid rgba(16, 185, 129, 0.3);
-    font-size: 10px;
-    font-weight: 700;
-    padding: 2px 6px;
-    border-radius: 4px;
-    text-transform: uppercase;
-    flex-shrink: 0;
+    border-color: rgba(16, 185, 129, 0.3);
+}
+.status-select.status-pending, .status-select[data-status="pending"] {
+    background: rgba(245, 158, 11, 0.12);
+    color: #d97706;
+    border-color: rgba(245, 158, 11, 0.3);
+}
+.status-select.status-overdue, .status-select[data-status="overdue"] {
+    background: rgba(239, 68, 68, 0.12);
+    color: #dc2626;
+    border-color: rgba(239, 68, 68, 0.3);
 }
 
-.new-client-name {
-    font-weight: 600;
-    font-size: 13px;
-    color: var(--text-main);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
+@media (max-width: 768px) {
+    /* Main Invoice Table Mobile Adjustments */
+    #invoice-table th {
+        padding: 8px 6px !important;
+        font-size: 11px !important;
+        white-space: nowrap;
+    }
+    #invoice-table td {
+        padding: 8px 6px !important;
+        font-size: 11px !important;
+    }
+    #invoice-table .badge {
+        font-size: 9px !important;
+        padding: 2px 5px !important;
+    }
+    .status-select {
+        padding: 3px 4px !important;
+        font-size: 10px !important;
+        max-width: 95px;
+    }
 
-.new-client-date {
-    font-size: 11px;
-    color: var(--text-muted);
+    /* Top & New Client Cards Mobile Sizing */
+    .top-client-item, .new-client-item {
+        padding: 8px 10px !important;
+        gap: 8px !important;
+        border-radius: 8px !important;
+    }
+    .top-client-rank {
+        width: 22px !important;
+        height: 22px !important;
+        font-size: 10px !important;
+    }
+    .top-client-name, .new-client-name {
+        font-size: 12px !important;
+    }
+    .top-client-amount {
+        font-size: 11px !important;
+    }
+    .top-client-count, .new-client-date {
+        font-size: 10px !important;
+    }
+    .badge-new-client {
+        font-size: 9px !important;
+        padding: 2px 4px !important;
+    }
 }
 
 .empty-analytics {
