@@ -366,9 +366,9 @@ window.generatePDF = async function (invoiceData, action = 'download') {
                         i + 1,
                         item.name,
                         item.qty,
-                        'Rp ' + Number(item.price).toLocaleString('id-ID'),
+                        window.formatRupiah ? window.formatRupiah(item.price, 'Rp ', true) : 'Rp ' + Number(item.price).toLocaleString('id-ID'),
                         isRental ? (descData || '-') : ((tbData || "NO-ENTRY") + " / \n" + (bgData || "NO-ENTRY")),
-                        'Rp ' + (item.qty * item.price).toLocaleString('id-ID')
+                        window.formatRupiah ? window.formatRupiah(item.qty * item.price, 'Rp ', true) : 'Rp ' + (item.qty * item.price).toLocaleString('id-ID')
                     ];
                 });
                 tColStyles = {
@@ -387,8 +387,8 @@ window.generatePDF = async function (invoiceData, action = 'download') {
                         i + 1,
                         item.name,
                         item.qty,
-                        'Rp ' + Number(item.price).toLocaleString('id-ID'),
-                        'Rp ' + (item.qty * item.price).toLocaleString('id-ID')
+                        window.formatRupiah ? window.formatRupiah(item.price, 'Rp ', true) : 'Rp ' + Number(item.price).toLocaleString('id-ID'),
+                        window.formatRupiah ? window.formatRupiah(item.qty * item.price, 'Rp ', true) : 'Rp ' + (item.qty * item.price).toLocaleString('id-ID')
                     ];
                 });
                 tColStyles = {
@@ -463,7 +463,7 @@ window.generatePDF = async function (invoiceData, action = 'download') {
             doc.setFontSize(9);
             doc.text('TOTAL TAGIHAN', totalBoxX + 5, finalY + 10);
             doc.setFontSize(12);
-            doc.text('Rp ' + Number(invoiceData.totalAmount).toLocaleString('id-ID'), totalBoxX + 75, finalY + 10, { align: 'right' });
+            doc.text(window.formatRupiah ? window.formatRupiah(invoiceData.totalAmount, 'Rp ', true) : 'Rp ' + Number(invoiceData.totalAmount).toLocaleString('id-ID'), totalBoxX + 75, finalY + 10, { align: 'right' });
 
             // PAYMENT INFO & VERIFICATION QR CODE
             const payY = finalY + 4;
@@ -597,4 +597,234 @@ window.generatePDF = async function (invoiceData, action = 'download') {
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { URL.revokeObjectURL(blobUrl); a.remove(); }, 1500);
+};
+
+// ══════════════════════════════════════════════════════
+// GENERATE BERITA ACARA PENGEMBALIAN BARANG (BAPB) PDF
+// ══════════════════════════════════════════════════════
+window.generateBapbPDF = async function(bapbData) {
+    const jsPDFClass = (window.jspdf && window.jspdf.jsPDF) ? window.jspdf.jsPDF : (window.jsPDF || null);
+    if (!jsPDFClass) {
+        if (typeof showToast === 'function') showToast('Library jsPDF belum dimuat', 'error');
+        return;
+    }
+
+    const doc = new jsPDFClass({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const pageW = 210, pageH = 297, marginL = 15, marginR = 15;
+    const ink = [15, 23, 42], midGray = [100, 116, 139], lineGray = [226, 232, 240], accentColor = [79, 70, 229];
+
+    // Load Logo
+    const logoImg = await loadImageAsBase64('./logo.png');
+
+    // ================================================
+    // HEADER (Identis dengan Header Invoice PDF)
+    // ================================================
+    const compX = marginL + 35;
+    const startY = 12;
+
+    if (logoImg && logoImg.dataUrl) {
+        const aspect = logoImg.aspect || 1;
+        let lH = 26;
+        let lW = lH * aspect;
+        if (lW > 44) {
+            lW = 44;
+            lH = lW / aspect;
+        }
+        const lY = 4 + (32 - lH) / 2;
+        doc.addImage(logoImg.dataUrl, 'PNG', marginL, lY, lW, lH);
+    } else {
+        doc.setFillColor(220, 220, 220);
+        doc.roundedRect(marginL, 6, 24, 32, 3, 3, 'F');
+        doc.setTextColor(...ink);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.text('PBM', marginL + 12, 22, { align: 'center' });
+    }
+
+    doc.setTextColor(35, 35, 35);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(15);
+    doc.text(bapbData.pihak1Company ? bapbData.pihak1Company.toUpperCase() : 'CV. PUTRA BANUA MANDIRI', compX, startY);
+
+    doc.setTextColor(...accentColor);
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text('GENERAL KONTRAKTOR BARANG DAN JASA', compX, startY + 5.5);
+
+    doc.setDrawColor(...lineGray);
+    doc.setLineWidth(0.1);
+    doc.line(compX, startY + 7.5, compX + 50, startY + 7.5);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(...midGray);
+    doc.text('JL. PENASTANI RT.001/RW.001, DS. BAKTI, KEC. BATU BENAWA,', compX, startY + 12);
+    doc.text('KAB. HULU SUNGAI TENGAH, KALIMANTAN SELATAN.', compX, startY + 16);
+
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...ink);
+    doc.text('Hubungi:', compX, startY + 24);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...midGray);
+    doc.text('0852-4822-2271   |   wawankaluan@gmail.com', compX + 12, startY + 24);
+
+    // TOP RIGHT BADGE
+    const badgeTitle = 'BERITA ACARA';
+    const badgeW = 46;
+    const badgeH = 14;
+    const badgeX = pageW - marginR - badgeW;
+    const badgeY = 6;
+
+    doc.setDrawColor(...ink);
+    doc.setLineWidth(0.4);
+    doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 2, 2, 'D');
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(badgeX + 0.5, badgeY + 0.5, badgeW - 1, badgeH - 1, 2, 2, 'F');
+
+    doc.setTextColor(...ink);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.text(badgeTitle, badgeX + (badgeW / 2), badgeY + 9.5, { align: 'center' });
+
+    // HEADER SEPARATOR LINE
+    doc.setDrawColor(...lineGray);
+    doc.setLineWidth(0.5);
+    doc.line(marginL, 40, pageW - marginR, 40);
+
+    // Title Block
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.setTextColor(...ink);
+    doc.text('BERITA ACARA PENGEMBALIAN BARANG', pageW / 2, 48, { align: 'center' });
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9.5);
+    doc.setTextColor(...midGray);
+    doc.text(`Nomor: ${bapbData.number || '-'}`, pageW / 2, 54, { align: 'center' });
+
+    // Statement Paragraph
+    const dateFormatted = bapbData.date ? new Date(bapbData.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '...';
+    doc.setFontSize(9);
+    doc.setTextColor(...ink);
+    
+    let yPos = 62;
+    doc.text(`Pada hari ini, ${dateFormatted}, kami yang bertanda tangan di bawah ini:`, marginL, yPos);
+    yPos += 6;
+
+    // Parties Box
+    doc.setDrawColor(...lineGray);
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(marginL, yPos, pageW - marginL - marginR, 28, 2, 2, 'FD');
+
+    doc.setFont('helvetica', 'bold');
+    doc.text('1. PIHAK PERTAMA (Yang Menyerahkan):', marginL + 4, yPos + 6);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${bapbData.pihak1Company || 'CV. PUTRA BANUA MANDIRI'} — ${bapbData.pihak1Name || '-'}${bapbData.pihak1Role ? ' (' + bapbData.pihak1Role + ')' : ''}`, marginL + 8, yPos + 11);
+
+    doc.setFont('helvetica', 'bold');
+    doc.text('2. PIHAK KEDUA (Yang Menerima / Klien):', marginL + 4, yPos + 18);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${bapbData.pihak2Client || '-'} — ${bapbData.pihak2Name || '-'}${bapbData.pihak2Role ? ' (' + bapbData.pihak2Role + ')' : ''}${bapbData.pihak2Address ? ' | Site: ' + bapbData.pihak2Address : ''}`, marginL + 8, yPos + 23);
+
+    yPos += 34;
+
+    doc.text(`Telah melakukan serah terima pengembalian barang ${bapbData.refInvoice ? '(Ref. Invoice: ' + bapbData.refInvoice + ')' : ''} dengan rincian kondisi sebagai berikut:`, marginL, yPos);
+    yPos += 5;
+
+    // Items Table (AutoTable)
+    const runAutoTable = (doc.autoTable && typeof doc.autoTable === 'function')
+        ? doc.autoTable.bind(doc)
+        : (window.jspdf && window.jspdf.autoTable) ? window.jspdf.autoTable.bind(doc) : null;
+
+    if (runAutoTable && bapbData.items && bapbData.items.length > 0) {
+        const tableBody = bapbData.items.map((item, idx) => [
+            idx + 1,
+            item.name || '-',
+            `${item.qty || 1} ${item.unit || 'Unit'}`,
+            (item.condition || 'Baik').toUpperCase(),
+            item.notes || '-'
+        ]);
+
+        runAutoTable({
+            startY: yPos,
+            margin: { left: marginL, right: marginR },
+            head: [['No', 'Nama Barang / Peralatan', 'Jumlah', 'Kondisi', 'Catatan / Keterangan']],
+            body: tableBody,
+            theme: 'grid',
+            headStyles: { fillColor: [79, 70, 229], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
+            styles: { fontSize: 8.5, cellPadding: 3 },
+            columnStyles: {
+                0: { cellWidth: 10, halign: 'center' },
+                1: { cellWidth: 70 },
+                2: { cellWidth: 30, halign: 'center' },
+                3: { cellWidth: 30, halign: 'center', fontStyle: 'bold' },
+                4: { cellWidth: 40 }
+            }
+        });
+
+        yPos = (doc.lastAutoTable && doc.lastAutoTable.finalY) ? doc.lastAutoTable.finalY + 8 : yPos + 40;
+    } else {
+        yPos += 10;
+    }
+
+    // Notes Box
+    if (bapbData.notes) {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.text('Catatan Serah Terima:', marginL, yPos);
+        yPos += 4;
+        doc.setFont('helvetica', 'normal');
+        const splitNotes = doc.splitTextToSize(bapbData.notes, pageW - marginL - marginR);
+        doc.text(splitNotes, marginL, yPos);
+        yPos += (splitNotes.length * 4) + 6;
+    }
+
+    // Statement Ending
+    doc.setFontSize(8.5);
+    doc.text('Demikian Berita Acara Pengembalian Barang ini dibuat dan ditandatangani oleh kedua belah pihak dalam keadaan sadar dan tanpa paksaan.', marginL, yPos);
+    yPos += 14;
+
+    // Dual Signatures
+    const sigW = 75;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+
+    // Left Signature: Pihak Pertama (PBM)
+    doc.text('PIHAK PERTAMA', marginL + (sigW / 2), yPos, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+    doc.text(bapbData.pihak1Company || 'CV. PUTRA BANUA MANDIRI', marginL + (sigW / 2), yPos + 4, { align: 'center' });
+
+    doc.line(marginL + 10, yPos + 24, marginL + sigW - 10, yPos + 24);
+    doc.setFont('helvetica', 'bold');
+    doc.text(bapbData.pihak1Name || '( .................................... )', marginL + (sigW / 2), yPos + 28, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    if (bapbData.pihak1Role) {
+        doc.text(bapbData.pihak1Role, marginL + (sigW / 2), yPos + 32, { align: 'center' });
+    }
+
+    // Right Signature: Pihak Kedua (Klien)
+    const rightX = pageW - marginR - sigW;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.text('PIHAK KEDUA', rightX + (sigW / 2), yPos, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+    doc.text(bapbData.pihak2Client || 'Pelanggan / Klien', rightX + (sigW / 2), yPos + 4, { align: 'center' });
+
+    doc.line(rightX + 10, yPos + 24, rightX + sigW - 10, yPos + 24);
+    doc.setFont('helvetica', 'bold');
+    doc.text(bapbData.pihak2Name || '( .................................... )', rightX + (sigW / 2), yPos + 28, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    if (bapbData.pihak2Role) {
+        doc.text(bapbData.pihak2Role, rightX + (sigW / 2), yPos + 32, { align: 'center' });
+    }
+
+    // Download PDF File
+    const cleanNo = (bapbData.number || 'BAPB').replace(/[^a-zA-Z0-9\-]/g, '_');
+    const fileName = `${cleanNo}_Pengembalian_Barang.pdf`;
+    doc.save(fileName);
+    if (typeof showToast === 'function') showToast(`PDF Berita Acara ${cleanNo} berhasil diunduh!`, 'success');
 };

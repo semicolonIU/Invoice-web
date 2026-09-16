@@ -373,6 +373,7 @@ textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79, 70
     .form-type-switch { width: 100%; display: flex; }
     .switch-btn { flex: 1; justify-content: center; padding: 9px 12px; }
     .btn { width: 100%; justify-content: center; }
+    header .btn, #privacy-toggle-btn, .notif-bell-btn { width: auto !important; justify-content: flex-start; }
 
     /* Narrower columns on mobile to save space */
     th, td { padding: 10px 6px !important; font-size: 13px !important; }
@@ -1522,6 +1523,69 @@ th.sortable.active-sort .sort-icon {
     border-color: rgba(239, 68, 68, 0.3);
 }
 
+.new-client-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    background: var(--bg-color);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    gap: 10px;
+    width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+    transition: transform 0.2s, background 0.2s;
+}
+
+.new-client-item:hover {
+    transform: translateX(4px);
+    background: var(--surface-hover);
+}
+
+.new-client-details {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.badge-new-client {
+    background: rgba(16, 185, 129, 0.12);
+    color: #059669;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+}
+
+.new-client-name {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.new-client-date {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.new-client-meta {
+    text-align: right;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
 @media (max-width: 768px) {
     /* Main Invoice Table Mobile Adjustments */
     #invoice-table th {
@@ -1546,8 +1610,10 @@ th.sortable.active-sort .sort-icon {
     /* Top & New Client Cards Mobile Sizing */
     .top-client-item, .new-client-item {
         padding: 8px 10px !important;
-        gap: 8px !important;
+        gap: 6px !important;
         border-radius: 8px !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
     }
     .top-client-rank {
         width: 22px !important;
@@ -1555,7 +1621,7 @@ th.sortable.active-sort .sort-icon {
         font-size: 10px !important;
     }
     .top-client-name, .new-client-name {
-        font-size: 12px !important;
+        font-size: 11px !important;
     }
     .top-client-amount {
         font-size: 11px !important;
@@ -1564,8 +1630,8 @@ th.sortable.active-sort .sort-icon {
         font-size: 10px !important;
     }
     .badge-new-client {
-        font-size: 9px !important;
-        padding: 2px 4px !important;
+        font-size: 8px !important;
+        padding: 1px 4px !important;
     }
 }
 
@@ -2063,6 +2129,40 @@ th.sortable.active-sort .sort-icon {
         padding: 8px 14px;
         font-size: 13px;
         margin-top: 4px;
+    }
+}
+
+/* ══════════════════════════════════════════════════════
+   PRIVACY MODE TOGGLE BUTTON
+   ══════════════════════════════════════════════════════ */
+#privacy-toggle-btn {
+    width: auto !important;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    font-size: 0.85rem;
+    border-radius: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    user-select: none;
+    -webkit-user-select: none;
+}
+#privacy-toggle-btn:hover {
+    transform: translateY(-1px);
+}
+#privacy-toggle-btn:active {
+    transform: translateY(0) scale(0.97);
+}
+
+@media (max-width: 768px) {
+    #privacy-toggle-btn {
+        padding: 6px 10px !important;
+        font-size: 0.78rem !important;
+        border-radius: 8px !important;
     }
 }
 

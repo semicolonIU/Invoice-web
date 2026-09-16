@@ -16,6 +16,63 @@ let searchDebounceTimer = null; // Debounce timer for search
 let currentSortBy = 'date';
 let currentSortDir = 'desc';
 let currentTypeFilter = 'all';
+let isPrivacyMode = localStorage.getItem('pbm_privacy_mode') === 'true';
+
+window.formatRupiah = function(amount, prefix = 'Rp ') {
+    if (isPrivacyMode) {
+        return (prefix || '') + '***.***.***';
+    }
+    const num = Number(amount) || 0;
+    return (prefix || '') + num.toLocaleString('id-ID');
+};
+
+window.togglePrivacyMode = function() {
+    isPrivacyMode = !isPrivacyMode;
+    try { localStorage.setItem('pbm_privacy_mode', isPrivacyMode ? 'true' : 'false'); } catch {}
+    updatePrivacyUI();
+    
+    // Fast in-memory UI re-render (instant response, 0ms latency)
+    updateStats();
+    renderInvoiceTable();
+    
+    // Update create form total if visible
+    const createView = document.getElementById('view-create');
+    if (createView && createView.style.display !== 'none' && typeof calculateTotal === 'function') {
+        calculateTotal();
+    }
+
+    // Update analytics if visible (skip chart animation for instant 0ms response)
+    const analyticsView = document.getElementById('view-analytics');
+    if (analyticsView && analyticsView.style.display !== 'none' && typeof renderAnalyticsDashboard === 'function') {
+        renderAnalyticsDashboard(null, true);
+    }
+    
+    notify(isPrivacyMode ? 'Sensor Nominal Uang AKTIF' : 'Sensor Nominal Uang NONAKTIF', 'info');
+};
+
+window.updatePrivacyUI = function() {
+    const btn = document.getElementById('privacy-toggle-btn');
+    const icon = document.getElementById('privacy-toggle-icon');
+    const text = document.getElementById('privacy-toggle-text');
+    if (!btn || !icon || !text) return;
+    if (isPrivacyMode) {
+        icon.className = 'fa-solid fa-eye-slash';
+        text.textContent = 'Sensor: On';
+        btn.classList.add('btn-warning');
+        btn.classList.remove('btn-outline');
+        btn.style.background = 'rgba(245, 158, 11, 0.2)';
+        btn.style.borderColor = '#f59e0b';
+        btn.style.color = '#fbbf24';
+    } else {
+        icon.className = 'fa-solid fa-eye';
+        text.textContent = 'Sensor: Off';
+        btn.classList.remove('btn-warning');
+        btn.classList.add('btn-outline');
+        btn.style.background = '';
+        btn.style.borderColor = '';
+        btn.style.color = '';
+    }
+};
 
 // ══════════════════════════════════════════════════════
 //  ACTIVITY LOG MODULE
@@ -397,16 +454,22 @@ let typeChart = null;
 let paymentChart = null;
 let analyticsRangeMonths = 6;
 
-const views = {
-    dashboard: document.getElementById('view-dashboard'),
-    analytics: document.getElementById('view-analytics'),
-    create: document.getElementById('view-create')
-};
-const navs = {
-    dashboard: document.getElementById('nav-dashboard'),
-    analytics: document.getElementById('nav-analytics'),
-    create: document.getElementById('nav-create')
-};
+function getViews() {
+    return {
+        dashboard: document.getElementById('view-dashboard'),
+        analytics: document.getElementById('view-analytics'),
+        create: document.getElementById('view-create'),
+        bapb: document.getElementById('view-bapb')
+    };
+}
+function getNavs() {
+    return {
+        dashboard: document.getElementById('nav-dashboard'),
+        analytics: document.getElementById('nav-analytics'),
+        create: document.getElementById('nav-create'),
+        bapb: document.getElementById('nav-bapb')
+    };
+}
 
 function closeMobileSidebar() {
     const sidebar = document.getElementById('sidebar');
@@ -416,6 +479,8 @@ function closeMobileSidebar() {
 }
 
 function switchView(viewName) {
+    const views = getViews();
+    const navs = getNavs();
     Object.values(views).forEach(v => { if (v) v.style.display = 'none'; });
     Object.values(navs).forEach(n => { if (n) n.classList.remove('active'); });
     if (views[viewName]) views[viewName].style.display = 'block';
@@ -427,10 +492,11 @@ function switchView(viewName) {
     if (fab) fab.style.display = viewName === 'dashboard' ? '' : 'none';
 }
 
-document.getElementById('nav-dashboard').addEventListener('click', () => { switchView('dashboard'); loadInvoices(1); });
-document.getElementById('nav-analytics')?.addEventListener('click', () => { switchView('analytics'); renderAnalyticsDashboard(); });
-document.getElementById('nav-create').addEventListener('click', () => { showCreate('normal'); });
-document.getElementById('nav-create-rental').addEventListener('click', () => { showCreate('rental'); });
+document.getElementById('nav-dashboard')?.addEventListener('click', (e) => { e.preventDefault(); switchView('dashboard'); loadInvoices(1); });
+document.getElementById('nav-analytics')?.addEventListener('click', (e) => { e.preventDefault(); switchView('analytics'); renderAnalyticsDashboard(); });
+document.getElementById('nav-create')?.addEventListener('click', (e) => { e.preventDefault(); showCreate('normal'); });
+document.getElementById('nav-create-rental')?.addEventListener('click', (e) => { e.preventDefault(); showCreate('rental'); });
+document.getElementById('nav-bapb')?.addEventListener('click', (e) => { e.preventDefault(); showBapbView(); });
 
 
 function showDashboard() { switchView('dashboard'); loadInvoices(1); }
@@ -573,7 +639,7 @@ window.calculateTotal = function() {
         const price = parseFloat(row.querySelector('.item-price').value) || 0;
         total += (qty * price);
     });
-    document.getElementById('grand-total').textContent = total.toLocaleString('id-ID');
+    document.getElementById('grand-total').textContent = isPrivacyMode ? '***.***.***' : total.toLocaleString('id-ID');
     return Number(total.toFixed(0)); // Ensure it's a clean integer for Appwrite if needed
 }
 
@@ -607,7 +673,7 @@ window.roundTotal = function() {
     lastRow.querySelector('.item-price').value = Math.round(lastPrice + adjustment);
 
     calculateTotal();
-    notify(`Total dibulatkan ke Rp ${rounded.toLocaleString('id-ID')} (selisih Rp ${Math.abs(diff).toLocaleString('id-ID')})`, 'success');
+    notify(`Total dibulatkan ke ${formatRupiah(rounded)} (selisih ${formatRupiah(Math.abs(diff))})`, 'success');
 }
 
 window.handleItemSelect = function(element) {
@@ -1296,6 +1362,8 @@ window.clearSearch = function() {
 }
 
 function renderInvoiceTable(docs) {
+    if (!docs) docs = currentInvoices;
+    if (!docs || !Array.isArray(docs)) return;
     const tbody = document.getElementById('invoice-list');
     
     // Process each doc to determine type and description
@@ -1336,7 +1404,7 @@ function renderInvoiceTable(docs) {
             <td>${Array.isArray(invoice.clientName) ? invoice.clientName[0] : invoice.clientName}</td>
             <td style="font-size:0.85em;">${itemKeterangan}</td>
             <td>${new Date(invoice.date).toLocaleDateString('id-ID')}</td>
-            <td style="font-weight:600; color:var(--text-main)">Rp ${Number(invoice.totalAmount).toLocaleString('id-ID')}</td>
+            <td style="font-weight:600; color:var(--text-main)">${formatRupiah(invoice.totalAmount)}</td>
             <td>
                 <select class="status-select status-${invoice.paymentStatus || 'pending'}" onchange="updatePaymentStatus('${invoice.$id}', this.value); this.className='status-select status-'+this.value;">
                     <option value="pending" ${invoice.paymentStatus === 'pending' ? 'selected' : ''}>Belum Lunas</option>
@@ -1359,7 +1427,8 @@ function renderInvoiceTable(docs) {
 }
 
 function updateStats(docs) {
-    if (!docs) return;
+    if (!docs) docs = statsData;
+    if (!docs || !Array.isArray(docs)) return;
     const now = new Date();
     const thisMonth = now.getMonth();
     const thisYear = now.getFullYear();
@@ -1394,25 +1463,25 @@ function updateStats(docs) {
     });
     
     const mTotalEl = document.getElementById('stat-month-total');
-    if (mTotalEl) mTotalEl.textContent = 'Rp ' + totalMonth.toLocaleString('id-ID');
+    if (mTotalEl) mTotalEl.textContent = formatRupiah(totalMonth);
     
     const mCountEl = document.getElementById('stat-month-count');
     if (mCountEl) mCountEl.textContent = countMonth + ' Invoice';
     
     const aTotalEl = document.getElementById('stat-all-total');
-    if (aTotalEl) aTotalEl.textContent = 'Rp ' + totalAll.toLocaleString('id-ID');
+    if (aTotalEl) aTotalEl.textContent = formatRupiah(totalAll);
     
     const aCountEl = document.getElementById('stat-all-count');
     if (aCountEl) aCountEl.textContent = countAll + ' Invoice';
 
     const pTotalEl = document.getElementById('stat-paid-total');
-    if (pTotalEl) pTotalEl.textContent = 'Rp ' + totalPaid.toLocaleString('id-ID');
+    if (pTotalEl) pTotalEl.textContent = formatRupiah(totalPaid);
 
     const pCountEl = document.getElementById('stat-paid-count');
     if (pCountEl) pCountEl.textContent = countPaid + ' Invoice';
 
     const pendTotalEl = document.getElementById('stat-pending-total');
-    if (pendTotalEl) pendTotalEl.textContent = 'Rp ' + totalPending.toLocaleString('id-ID');
+    if (pendTotalEl) pendTotalEl.textContent = formatRupiah(totalPending);
 
     const pendCountEl = document.getElementById('stat-pending-count');
     if (pendCountEl) pendCountEl.textContent = countPending + ' Invoice';
@@ -1544,7 +1613,7 @@ document.getElementById('invoice-form').addEventListener('submit', async (e) => 
             : `Invoice ${invoiceData.NoInvoice} dibuat`;
         const savedClient = Array.isArray(invoiceData.clientName) ? invoiceData.clientName[0] : invoiceData.clientName;
         ActivityLog.add(savedType, savedLabel,
-            `Klien: ${savedClient || '-'} | Total: Rp ${(invoiceData.totalAmount||0).toLocaleString('id-ID')}`,
+            `Klien: ${savedClient || '-'} | Total: ${formatRupiah(invoiceData.totalAmount||0)}`,
             { invoiceId: editingId || '', snapshot: prevSnapshot || ActivityLog.makeSnapshot(invoiceData) }
         );
 
@@ -1794,7 +1863,7 @@ window.deleteInvoice = async function(id) {
             ActivityLog.add(
                 'delete_invoice',
                 `Invoice ${invNo} dihapus`,
-                `Klien: ${client} | Total: Rp ${(invoice?.totalAmount||0).toLocaleString('id-ID')}`,
+                `Klien: ${client} | Total: ${formatRupiah(invoice?.totalAmount||0)}`,
                 { invoiceId: id, snapshot }
             );
             statsData = [];
@@ -2016,6 +2085,7 @@ async function initAndLoad() {
 
 // Boot up
 window.addEventListener('DOMContentLoaded', async () => {
+    updatePrivacyUI();
     // Setup listeners
     const loginForm = document.getElementById('login-form');
     if (loginForm) loginForm.addEventListener('submit', window.handleLogin);
@@ -2282,7 +2352,7 @@ window.setAnalyticsRange = function(months) {
     renderAnalyticsDashboard();
 };
 
-function renderAnalyticsDashboard(docsTarget) {
+function renderAnalyticsDashboard(docsTarget, skipAnimation = false) {
     const docs = docsTarget || (statsData.length > 0 ? statsData : currentInvoices);
     if (!docs || docs.length === 0) return;
 
@@ -2393,16 +2463,16 @@ function renderAnalyticsDashboard(docsTarget) {
 
     // 2. Render KPI Cards
     const ytdEl = document.getElementById('analytics-kpi-ytd');
-    if (ytdEl) ytdEl.textContent = 'Rp ' + totalOmset.toLocaleString('id-ID');
+    if (ytdEl) ytdEl.textContent = formatRupiah(totalOmset);
 
     const monthEl = document.getElementById('analytics-kpi-month');
-    if (monthEl) monthEl.textContent = 'Rp ' + totalThisMonth.toLocaleString('id-ID');
+    if (monthEl) monthEl.textContent = formatRupiah(totalThisMonth);
 
     const paidEl = document.getElementById('analytics-kpi-total-paid');
-    if (paidEl) paidEl.textContent = 'Rp ' + totalPaid.toLocaleString('id-ID');
+    if (paidEl) paidEl.textContent = formatRupiah(totalPaid);
 
     const pendingEl = document.getElementById('analytics-kpi-total-pending');
-    if (pendingEl) pendingEl.textContent = 'Rp ' + totalPending.toLocaleString('id-ID');
+    if (pendingEl) pendingEl.textContent = formatRupiah(totalPending);
 
     // Monthly Delta
     const monthChangeEl = document.getElementById('analytics-kpi-month-change');
@@ -2448,10 +2518,10 @@ function renderAnalyticsDashboard(docsTarget) {
     const newClientsCountEl = document.getElementById('analytics-kpi-new-clients-count');
     if (newClientsCountEl) newClientsCountEl.textContent = `${newClients.length} pelanggan baru (30hr)`;
 
-    // 3. Render Charts
-    renderRevenueTrendChart(filteredDocs, analyticsRangeMonths || 6);
-    renderTypeDonutChart(typeCounts);
-    renderPaymentDonutChart(paymentCounts);
+    // 3. Render Charts (fast update if skipAnimation=true)
+    renderRevenueTrendChart(filteredDocs, analyticsRangeMonths || 6, skipAnimation);
+    renderTypeDonutChart(typeCounts, skipAnimation);
+    renderPaymentDonutChart(paymentCounts, skipAnimation);
 
     // 4. Render Lists & Monthly Breakdown Table
     renderTopClientsList(clientTotals);
@@ -2460,7 +2530,7 @@ function renderAnalyticsDashboard(docsTarget) {
 }
 
 // Chart 1: Revenue Trend Bar Chart
-function renderRevenueTrendChart(docs, monthsToShow = 6) {
+function renderRevenueTrendChart(docs, monthsToShow = 6, skipAnimation = false) {
     const canvas = document.getElementById('chart-revenue-trend');
     if (!canvas || typeof Chart === 'undefined') return;
 
@@ -2493,7 +2563,11 @@ function renderRevenueTrendChart(docs, monthsToShow = 6) {
     });
 
     if (revenueChart) {
-        revenueChart.destroy();
+        revenueChart.data.labels = monthLabels;
+        revenueChart.data.datasets[0].data = monthlyPaid;
+        revenueChart.data.datasets[1].data = monthlyPending;
+        revenueChart.update(skipAnimation ? 'none' : undefined);
+        return;
     }
 
     const ctx = canvas.getContext('2d');
@@ -2529,7 +2603,7 @@ function renderRevenueTrendChart(docs, monthsToShow = 6) {
                 tooltip: {
                     callbacks: {
                         label: function(context) {
-                            return `${context.dataset.label}: Rp ${Number(context.raw).toLocaleString('id-ID')}`;
+                            return `${context.dataset.label}: ${formatRupiah(context.raw)}`;
                         }
                     }
                 }
@@ -2557,12 +2631,14 @@ function renderRevenueTrendChart(docs, monthsToShow = 6) {
 }
 
 // Chart 2: Type Composition Donut
-function renderTypeDonutChart(typeCounts) {
+function renderTypeDonutChart(typeCounts, skipAnimation = false) {
     const canvas = document.getElementById('chart-type-donut');
     if (!canvas || typeof Chart === 'undefined') return;
 
     if (typeChart) {
-        typeChart.destroy();
+        typeChart.data.datasets[0].data = [typeCounts.normal, typeCounts.rental];
+        typeChart.update(skipAnimation ? 'none' : undefined);
+        return;
     }
 
     const ctx = canvas.getContext('2d');
@@ -2592,12 +2668,14 @@ function renderTypeDonutChart(typeCounts) {
 }
 
 // Chart 3: Payment Status Donut
-function renderPaymentDonutChart(paymentCounts) {
+function renderPaymentDonutChart(paymentCounts, skipAnimation = false) {
     const canvas = document.getElementById('chart-payment-donut');
     if (!canvas || typeof Chart === 'undefined') return;
 
     if (paymentChart) {
-        paymentChart.destroy();
+        paymentChart.data.datasets[0].data = [paymentCounts.paid, paymentCounts.pending, paymentCounts.overdue];
+        paymentChart.update(skipAnimation ? 'none' : undefined);
+        return;
     }
 
     const ctx = canvas.getContext('2d');
@@ -2655,7 +2733,7 @@ function renderTopClientsList(clientTotals) {
                     </div>
                 </div>
                 <div class="top-client-meta">
-                    <div class="top-client-amount">Rp ${client.total.toLocaleString('id-ID')}</div>
+                    <div class="top-client-amount">${formatRupiah(client.total)}</div>
                     <div class="top-client-count">${client.count} Invoice</div>
                 </div>
             </div>
@@ -2677,13 +2755,13 @@ function renderNewClientsList(newClients) {
         <div class="new-client-item">
             <div class="new-client-details">
                 <span class="badge-new-client">BARU</span>
-                <div>
-                    <div class="new-client-name">${c.name}</div>
-                    <div class="new-client-date"><i class="fa-solid fa-clock-rotate-left"></i> Bergabung: ${c.date.toLocaleDateString('id-ID')}</div>
+                <div style="min-width:0; flex:1; overflow:hidden;">
+                    <div class="new-client-name" title="${c.name}">${c.name}</div>
+                    <div class="new-client-date"><i class="fa-solid fa-clock-rotate-left"></i> ${c.date.toLocaleDateString('id-ID')}</div>
                 </div>
             </div>
-            <div class="top-client-amount" style="font-size:12px;">
-                Rp ${c.amount.toLocaleString('id-ID')}
+            <div class="new-client-meta">
+                <div class="top-client-amount">${formatRupiah(c.amount)}</div>
             </div>
         </div>
     `).join('');
@@ -2722,11 +2800,11 @@ function renderMonthlyBreakdownTable(monthlySummary) {
         return `
             <tr>
                 <td><strong>${item.label}</strong></td>
-                <td><strong>Rp ${item.total.toLocaleString('id-ID')}</strong> <small class="text-muted">(${item.count})</small></td>
-                <td>Rp ${item.normal.toLocaleString('id-ID')}</td>
-                <td>Rp ${item.rental.toLocaleString('id-ID')}</td>
-                <td style="color:#059669; font-weight:600;">Rp ${item.paid.toLocaleString('id-ID')}</td>
-                <td style="color:#dc2626; font-weight:600;">Rp ${item.pending.toLocaleString('id-ID')}</td>
+                <td><strong>${formatRupiah(item.total)}</strong> <small class="text-muted">(${item.count})</small></td>
+                <td>${formatRupiah(item.normal)}</td>
+                <td>${formatRupiah(item.rental)}</td>
+                <td style="color:#059669; font-weight:600;">${formatRupiah(item.paid)}</td>
+                <td style="color:#dc2626; font-weight:600;">${formatRupiah(item.pending)}</td>
                 <td><span class="badge ${badgeClass}">${rate}% Lunas</span></td>
             </tr>
         `;
@@ -2746,11 +2824,11 @@ function renderMonthlyBreakdownTable(monthlySummary) {
         tfoot.innerHTML = `
             <tr style="background: var(--surface-hover); font-weight:700; border-top: 2px solid var(--border);">
                 <td><strong>TOTAL KESELURUHAN</strong></td>
-                <td><strong>Rp ${gTotal.toLocaleString('id-ID')}</strong> <small class="text-muted">(${gCount})</small></td>
-                <td>Rp ${gNormal.toLocaleString('id-ID')}</td>
-                <td>Rp ${gRental.toLocaleString('id-ID')}</td>
-                <td style="color:#059669; font-weight:700;">Rp ${gPaid.toLocaleString('id-ID')}</td>
-                <td style="color:#dc2626; font-weight:700;">Rp ${gPending.toLocaleString('id-ID')}</td>
+                <td><strong>${formatRupiah(gTotal)}</strong> <small class="text-muted">(${gCount})</small></td>
+                <td>${formatRupiah(gNormal)}</td>
+                <td>${formatRupiah(gRental)}</td>
+                <td style="color:#059669; font-weight:700;">${formatRupiah(gPaid)}</td>
+                <td style="color:#dc2626; font-weight:700;">${formatRupiah(gPending)}</td>
                 <td><span class="badge ${gBadgeClass}">${gRate}% Overall</span></td>
             </tr>
         `;
@@ -2863,7 +2941,7 @@ async function downloadAnalyticsPDF() {
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(14);
         doc.setTextColor(30, 41, 59);
-        doc.text('PT PUTRA BANUA MANDIRI', startX, 17);
+        doc.text('CV PUTRA BANUA MANDIRI', startX, 17);
 
         doc.setFontSize(9.5);
         doc.setFont('helvetica', 'normal');
@@ -2911,9 +2989,9 @@ async function downloadAnalyticsPDF() {
             startY: 63,
             head: [['Indikator Performa (KPI)', 'Nilai / Nominal', 'Keterangan']],
             body: [
-                ['Total Omset Tagihan', `Rp ${totalOmset.toLocaleString('id-ID')}`, `${docs.length} total invoice`],
-                ['Total Pendapatan Terbayar (Lunas)', `Rp ${totalPaid.toLocaleString('id-ID')}`, `${paidCount} invoice lunas`],
-                ['Total Sisa Piutang (Belum Lunas/Jatuh Tempo)', `Rp ${totalPending.toLocaleString('id-ID')}`, `${pendingCount} invoice belum lunas`],
+                ['Total Omset Tagihan', formatRupiah(totalOmset, 'Rp ', true), `${docs.length} total invoice`],
+                ['Total Pendapatan Terbayar (Lunas)', formatRupiah(totalPaid, 'Rp ', true), `${paidCount} invoice lunas`],
+                ['Total Sisa Piutang (Belum Lunas/Jatuh Tempo)', formatRupiah(totalPending, 'Rp ', true), `${pendingCount} invoice belum lunas`],
                 ['Tingkat Pelunasan (Collection Rate)', `${docs.length > 0 ? Math.round((paidCount / docs.length) * 100) : 0}%`, `${paidCount} dari ${docs.length} lunas`],
                 ['Komposisi Tipe Transaksi', `${normalCount} Reguler / ${rentalCount} Sewa`, 'Distribusi tipe tagihan'],
                 ['Total Pelanggan Aktif', `${Object.keys(clientTotals).length} Pelanggan`, 'Mitra bisnis terdaftar']
@@ -2931,9 +3009,9 @@ async function downloadAnalyticsPDF() {
             return [
                 item.label,
                 `${item.count} Inv`,
-                `Rp ${item.total.toLocaleString('id-ID')}`,
-                `Rp ${item.paid.toLocaleString('id-ID')}`,
-                `Rp ${item.pending.toLocaleString('id-ID')}`,
+                formatRupiah(item.total, 'Rp ', true),
+                formatRupiah(item.paid, 'Rp ', true),
+                formatRupiah(item.pending, 'Rp ', true),
                 `${rate}%`
             ];
         });
@@ -2957,7 +3035,7 @@ async function downloadAnalyticsPDF() {
         const topClientsArr = Object.entries(clientTotals)
             .sort((a, b) => b[1].total - a[1].total)
             .slice(0, 5)
-            .map(([name, d]) => [name, `${d.count} Invoice`, `Rp ${d.total.toLocaleString('id-ID')}`]);
+            .map(([name, d]) => [name, `${d.count} Invoice`, formatRupiah(d.total, 'Rp ', true)]);
 
         if (lastY + 45 > 280) {
             doc.addPage();
@@ -2986,7 +3064,7 @@ async function downloadAnalyticsPDF() {
             doc.setPage(i);
             doc.setFontSize(8);
             doc.setTextColor(148, 163, 184);
-            doc.text(`PT PUTRA BANUA MANDIRI — Laporan Rekapitulasi Analitik — Halaman ${i} dari ${pageCount}`, 15, 290);
+            doc.text(`CV PUTRA BANUA MANDIRI — Laporan Rekapitulasi Analitik — Halaman ${i} dari ${pageCount}`, 15, 290);
         }
 
         // Save PDF
@@ -3004,3 +3082,460 @@ async function downloadAnalyticsPDF() {
 }
 window.downloadAnalyticsPDF = downloadAnalyticsPDF;
 
+
+
+// ══════════════════════════════════════════════════════
+//  BAPB — BERITA ACARA PENGEMBALIAN BARANG
+// ══════════════════════════════════════════════════════
+
+function generateNextBapbNumber() {
+    var now = new Date();
+    var year = now.getFullYear();
+    var month = String(now.getMonth() + 1).padStart(2, '0');
+    var prefix = 'BAPB/PBM/' + year + '/' + month + '/';
+
+    var maxSeq = 0;
+
+    // Scan local database store
+    try {
+        var localDb = JSON.parse(localStorage.getItem('pbm_bapb_db') || '[]');
+        if (Array.isArray(localDb)) {
+            localDb.forEach(function(b) {
+                if (b && b.number) {
+                    var match = b.number.match(/(\d+)\s*$/);
+                    if (match) {
+                        var seq = parseInt(match[1], 10);
+                        if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+                    }
+                }
+            });
+        }
+    } catch(e) {}
+
+    // Scan Activity Log
+    try {
+        if (typeof ActivityLog !== 'undefined' && Array.isArray(ActivityLog.logs)) {
+            ActivityLog.logs.forEach(function(log) {
+                if (log && log.actionTarget && log.actionTarget.includes('BAPB')) {
+                    var match = log.actionTarget.match(/(\d+)\s*$/);
+                    if (match) {
+                        var seq = parseInt(match[1], 10);
+                        if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+                    }
+                }
+            });
+        }
+    } catch(e) {}
+
+    var nextSeq = String(maxSeq + 1).padStart(3, '0');
+    return prefix + nextSeq;
+}
+window.generateNextBapbNumber = generateNextBapbNumber;
+
+function showBapbView() {
+    try {
+        switchView('bapb');
+    } catch(e) {
+        console.error("switchView failed:", e);
+    }
+    try {
+        populateBapbInvoiceSelect();
+        var dateEl = document.getElementById('bapb-date');
+        if (dateEl && !dateEl.value) dateEl.value = new Date().toISOString().split('T')[0];
+        var numEl = document.getElementById('bapb-number');
+        if (numEl && !numEl.value) {
+            numEl.value = generateNextBapbNumber();
+        }
+        var tbody = document.getElementById('bapb-items-tbody');
+        if (tbody && tbody.rows.length === 0) addBapbItemRow();
+
+        // Render history table
+        renderBapbHistoryTable();
+
+        // Sync BAPB data from Appwrite Cloud Database across devices
+        syncBapbFromAppwriteCloud();
+    } catch(err) {
+        console.error("Error in showBapbView:", err);
+    }
+}
+window.showBapbView = showBapbView;
+
+async function syncBapbFromAppwriteCloud() {
+    if (typeof API === 'undefined' || !API.getLogs) return;
+    try {
+        var docs = await API.getLogs(200);
+        if (!docs || !Array.isArray(docs)) return;
+        var existingLocal = [];
+        try { existingLocal = JSON.parse(localStorage.getItem('pbm_bapb_db') || '[]'); } catch(e){}
+        var updated = false;
+
+        docs.forEach(function(log) {
+            var target = log.actionTarget || log.label || '';
+            var detail = log.detail || log.details || '';
+            if (target.includes('BAPB') && detail && detail.includes('{')) {
+                try {
+                    var jsonStart = detail.indexOf('{');
+                    if (jsonStart >= 0) {
+                        var bData = JSON.parse(detail.substring(jsonStart));
+                        if (bData && bData.number) {
+                            var exists = existingLocal.some(function(b){ return b.number === bData.number; });
+                            if (!exists) {
+                                existingLocal.push(bData);
+                                updated = true;
+                            }
+                        }
+                    }
+                } catch(err){}
+            }
+        });
+
+        if (updated) {
+            existingLocal.sort(function(a,b){ return new Date(b.date || b.savedAt || 0) - new Date(a.date || a.savedAt || 0); });
+            localStorage.setItem('pbm_bapb_db', JSON.stringify(existingLocal));
+            if (typeof renderBapbHistoryTable === 'function') {
+                renderBapbHistoryTable();
+            }
+            var numEl = document.getElementById('bapb-number');
+            if (numEl && typeof generateNextBapbNumber === 'function') {
+                numEl.value = generateNextBapbNumber();
+            }
+        }
+    } catch(err) {
+        console.warn("Sync BAPB from Appwrite Cloud error:", err);
+    }
+}
+window.syncBapbFromAppwriteCloud = syncBapbFromAppwriteCloud;
+
+function populateBapbInvoiceSelect() {
+    try {
+        var select = document.getElementById('bapb-select-invoice');
+        if (!select) return;
+        var allInvoices = [];
+        if (typeof statsData !== 'undefined' && Array.isArray(statsData) && statsData.length > 0) {
+            allInvoices = statsData;
+        } else if (typeof currentInvoices !== 'undefined' && Array.isArray(currentInvoices)) {
+            allInvoices = currentInvoices;
+        }
+        var rentalInvoices = allInvoices.filter(function(inv) {
+            try {
+                if (!inv) return false;
+                var note = inv.note ? (typeof inv.note === 'string' ? JSON.parse(inv.note) : inv.note) : null;
+                var data = inv.items ? (typeof inv.items === 'string' ? JSON.parse(inv.items) : inv.items) : null;
+                return (note && note.type === 'rental') || (data && data.type === 'rental') ||
+                       (inv.NoInvoice && String(inv.NoInvoice).toUpperCase().startsWith('SW')) ||
+                       Boolean(note && note.rental && (note.rental.awal || note.rental.akhir));
+            } catch(e) { return false; }
+        });
+        rentalInvoices.sort(function(a,b){ return new Date(b.date||b.$createdAt||0)-new Date(a.date||a.$createdAt||0); });
+        select.innerHTML = '<option value="">-- Pilih Invoice Sewa --</option>';
+        rentalInvoices.forEach(function(inv) {
+            var clientName = Array.isArray(inv.clientName) ? inv.clientName[0] : (inv.clientName || '-');
+            var opt = document.createElement('option');
+            opt.value = inv.$id || '';
+            opt.textContent = (inv.NoInvoice || 'SW') + ' \u2014 ' + clientName;
+            select.appendChild(opt);
+        });
+        if (rentalInvoices.length === 0) {
+            var opt = document.createElement('option');
+            opt.disabled = true;
+            opt.textContent = '(Tidak ada invoice sewa tersedia)';
+            select.appendChild(opt);
+        }
+    } catch(err) {
+        console.error("Error in populateBapbInvoiceSelect:", err);
+    }
+}
+window.populateBapbInvoiceSelect = populateBapbInvoiceSelect;
+
+window.showBapbMode = function(mode) {
+    _bapbCurrentMode = mode;
+    var sourceCard = document.querySelector('.bapb-source-card');
+    if (sourceCard) sourceCard.style.display = mode === 'invoice' ? '' : 'none';
+    if (mode === 'manual') {
+        var sel = document.getElementById('bapb-select-invoice');
+        if (sel) sel.value = '';
+        ['bapb-pihak2-client','bapb-pihak2-address','bapb-pihak2-name','bapb-ref-invoice'].forEach(function(id){
+            var el = document.getElementById(id); if (el) el.value = '';
+        });
+        var tbody = document.getElementById('bapb-items-tbody');
+        if (tbody) { tbody.innerHTML = ''; _bapbItemCounter = 0; addBapbItemRow(); }
+    }
+    var btns = document.querySelectorAll('.analytics-actions-right .btn');
+    btns.forEach(function(btn){ btn.classList.remove('btn-primary'); });
+    var activeIdx = mode === 'invoice' ? 0 : 1;
+    if (btns[activeIdx]) btns[activeIdx].classList.add('btn-primary');
+};
+
+window.handleBapbInvoiceSelect = function(invoiceId) {
+    if (!invoiceId) return;
+    var allInvoices = (statsData && statsData.length > 0) ? statsData : currentInvoices;
+    var inv = allInvoices.find(function(i){ return i.$id === invoiceId; });
+    if (!inv) { showToast('Invoice tidak ditemukan.', 'warning'); return; }
+    var noteData = null, itemsData = null;
+    try { noteData = inv.note ? (typeof inv.note === 'string' ? JSON.parse(inv.note) : inv.note) : null; } catch(e){}
+    try { itemsData = inv.items ? (typeof inv.items === 'string' ? JSON.parse(inv.items) : inv.items) : null; } catch(e){}
+    var setVal = function(id, val) { var el = document.getElementById(id); if (el) el.value = val || ''; };
+    setVal('bapb-ref-invoice', inv.NoInvoice);
+    var clientName = Array.isArray(inv.clientName) ? inv.clientName[0] : (inv.clientName || '');
+    var clientAddr = Array.isArray(inv.clientAddress) ? inv.clientAddress[0] : (inv.clientAddress || '');
+    setVal('bapb-pihak2-client', clientName);
+    setVal('bapb-pihak2-address', clientAddr || (noteData && noteData.site) || '');
+    setVal('bapb-pihak2-name', (noteData && noteData.picName) || '');
+    var tbody = document.getElementById('bapb-items-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = ''; _bapbItemCounter = 0;
+    var itemArr = [];
+    if (itemsData) {
+        if (Array.isArray(itemsData)) itemArr = itemsData;
+        else if (itemsData.itemList && Array.isArray(itemsData.itemList)) itemArr = itemsData.itemList;
+    }
+    if (itemArr.length === 0 && noteData && Array.isArray(noteData.itemList)) itemArr = noteData.itemList;
+    if (itemArr.length > 0) {
+        itemArr.forEach(function(item){
+            addBapbItemRow({ name: item.name||item.description||'', qty: item.qty||item.quantity||1, unit: item.unit||item.satuan||'Unit', condition: 'Baik', notes: '' });
+        });
+    } else { addBapbItemRow(); }
+    showToast('Data dari Invoice ' + inv.NoInvoice + ' berhasil dimuat!', 'success');
+};
+
+function addBapbItemRow(preset) {
+    preset = preset || {};
+    var tbody = document.getElementById('bapb-items-tbody');
+    if (!tbody) return;
+    var idx = tbody.rows.length + 1;
+    var conditions = ['Baik','Rusak Ringan','Rusak Berat','Hilang'];
+    var conditionOpts = conditions.map(function(c){
+        return '<option value="'+c+'"'+(((preset.condition||'Baik')===c)?' selected':'')+'>'+c+'</option>';
+    }).join('');
+    var tr = document.createElement('tr');
+    tr.style.borderBottom = '1px solid var(--border)';
+    tr.innerHTML = '<td style="text-align:center;color:var(--text-muted);font-size:13px;padding:8px 6px;font-weight:600;">'+idx+'</td>' +
+        '<td style="padding:6px 4px;"><input type="text" class="input-field" style="width:100%;min-width:140px;font-size:13px;" placeholder="Nama barang/peralatan" value="'+(preset.name||'').replace(/"/g, '&quot;')+'" required /></td>' +
+        '<td style="padding:6px 4px;"><input type="number" class="input-field" style="width:100%;font-size:13px;" min="0.01" step="0.01" value="'+(preset.qty||1)+'" /></td>' +
+        '<td style="padding:6px 4px;"><input type="text" class="input-field" style="width:100%;font-size:13px;" placeholder="Unit" value="'+(preset.unit||'Unit').replace(/"/g, '&quot;')+'" /></td>' +
+        '<td style="padding:6px 4px;"><select class="input-field" style="width:100%;font-size:12px;font-weight:600;">'+conditionOpts+'</select></td>' +
+        '<td style="padding:6px 4px;"><input type="text" class="input-field" style="width:100%;font-size:12px;" placeholder="Catatan..." value="'+(preset.notes||'').replace(/"/g, '&quot;')+'" /></td>' +
+        '<td style="text-align:center;padding:6px 4px;"><button type="button" class="btn btn-danger btn-action" onclick="removeBapbItemRow(this)" title="Hapus baris" style="padding:4px 8px;"><i class="fa-solid fa-trash"></i></button></td>';
+    tbody.appendChild(tr);
+    tbody.querySelectorAll('tr').forEach(function(r, i){ if (r.cells[0]) r.cells[0].textContent = i+1; });
+    return tr;
+}
+window.addBapbItemRow = addBapbItemRow;
+
+window.removeBapbItemRow = function(btn) {
+    var tr = btn.closest('tr');
+    if (!tr) return;
+    var tbody = tr.closest('tbody');
+    if (tbody && tbody.rows.length <= 1) { showToast('Harus ada minimal 1 barang dalam daftar.', 'warning'); return; }
+    tr.remove();
+    tbody.querySelectorAll('tr').forEach(function(r, i){ if (r.cells[0]) r.cells[0].textContent = i+1; });
+};
+
+function collectBapbData() {
+    var getVal = function(id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; };
+    var items = [];
+    var tbody = document.getElementById('bapb-items-tbody');
+    if (tbody) {
+        tbody.querySelectorAll('tr').forEach(function(tr) {
+            var inp = tr.querySelectorAll('input, select');
+            if (inp.length >= 5) {
+                items.push({ name: (inp[0]?inp[0].value:'').trim()||'-', qty: parseFloat(inp[1]?inp[1].value:1)||1,
+                    unit: (inp[2]?inp[2].value:'').trim()||'Unit', condition: inp[3]?inp[3].value:'Baik', notes: (inp[4]?inp[4].value:'').trim() });
+            }
+        });
+    }
+    return { number: getVal('bapb-number'), date: getVal('bapb-date'), refInvoice: getVal('bapb-ref-invoice'),
+        pihak1Company: getVal('bapb-pihak1-company')||'CV PUTRA BANUA MANDIRI', pihak1Name: getVal('bapb-pihak1-name'),
+        pihak1Role: getVal('bapb-pihak1-role'), pihak2Client: getVal('bapb-pihak2-client'),
+        pihak2Address: getVal('bapb-pihak2-address'), pihak2Name: getVal('bapb-pihak2-name'),
+        pihak2Role: getVal('bapb-pihak2-role'), notes: getVal('bapb-notes'), items: items };
+}
+
+window.handleBapbSubmit = async function(e) {
+    e.preventDefault();
+    var data = collectBapbData();
+    if (!data.number)       { showToast('No. Berita Acara wajib diisi.', 'error'); return; }
+    if (!data.date)         { showToast('Tanggal Pengembalian wajib diisi.', 'error'); return; }
+    if (!data.pihak1Name)   { showToast('Nama Petugas wajib diisi.', 'error'); return; }
+    if (!data.pihak2Client) { showToast('Nama Klien wajib diisi.', 'error'); return; }
+    if (!data.items.length) { showToast('Tambahkan minimal 1 barang ke daftar.', 'error'); return; }
+    var submitBtn = document.getElementById('bapb-submit-btn');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Menyimpan...'; }
+    try {
+        // Save to BAPB local database store
+        var existingBapb = [];
+        try { existingBapb = JSON.parse(localStorage.getItem('pbm_bapb_db') || '[]'); } catch(err){}
+        data.savedAt = new Date().toISOString();
+        var existIndex = existingBapb.findIndex(function(b){ return b.number === data.number; });
+        if (existIndex >= 0) existingBapb[existIndex] = data;
+        else existingBapb.unshift(data);
+        localStorage.setItem('pbm_bapb_db', JSON.stringify(existingBapb));
+
+        // Save to Activity Log (which syncs directly to Appwrite Cloud Database)
+        if (typeof ActivityLog !== 'undefined') {
+            ActivityLog.add('create_invoice', 'BAPB ' + data.number, 'Klien: ' + data.pihak2Client + ' | ' + data.items.length + ' item | ' + JSON.stringify(data));
+        }
+        showToast('Berita Acara ' + data.number + ' berhasil disimpan ke database!', 'success');
+        renderBapbHistoryTable();
+        setTimeout(function(){ window.downloadCurrentBapbPDF(); }, 600);
+    } catch(err) {
+        console.error('BAPB submit error:', err);
+        showToast('Gagal menyimpan: ' + err.message, 'error');
+    } finally {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Simpan Berita Acara'; }
+    }
+};
+
+window.downloadCurrentBapbPDF = async function() {
+    var data = collectBapbData();
+    if (!data.number)       { showToast('No. Berita Acara wajib diisi sebelum download PDF.', 'warning'); return; }
+    if (!data.items.length) { showToast('Tambahkan minimal 1 barang sebelum download PDF.', 'warning'); return; }
+    try {
+        var fn = window.generateBapbPDF;
+        if (!fn) { showToast('Fungsi generateBapbPDF belum dimuat.', 'error'); return; }
+        await fn(data);
+        if (typeof ActivityLog !== 'undefined') ActivityLog.add('download_pdf', 'PDF BAPB ' + data.number, 'Klien: ' + data.pihak2Client);
+    } catch(err) {
+        console.error('BAPB PDF error:', err);
+        showToast('Gagal generate PDF: ' + err.message, 'error');
+    }
+};
+
+window.resetBapbForm = async function() {
+    var confirmed = await showConfirm('Reset Form Berita Acara?', 'Semua data yang sudah diisi akan dihapus. Yakin ingin mereset?',
+        { type: 'danger', confirmText: 'Ya, Reset', icon: 'fa-rotate-left' });
+    if (!confirmed) return;
+    var form = document.getElementById('bapb-form'); if (form) form.reset();
+    var sel = document.getElementById('bapb-select-invoice'); if (sel) sel.value = '';
+    var tbody = document.getElementById('bapb-items-tbody');
+    if (tbody) { tbody.innerHTML = ''; _bapbItemCounter = 0; addBapbItemRow(); }
+    var dateEl = document.getElementById('bapb-date'); if (dateEl) dateEl.value = new Date().toISOString().split('T')[0];
+    var numEl = document.getElementById('bapb-number');
+    if (numEl) { numEl.value = generateNextBapbNumber(); }
+    showToast('Form Berita Acara berhasil direset.', 'info');
+};
+
+// ── BAPB History Table Functions ─────────────────────────
+
+function renderBapbHistoryTable() {
+    var tbody = document.getElementById('bapb-history-tbody');
+    if (!tbody) return;
+
+    var searchInput = document.getElementById('bapb-history-search');
+    var query = searchInput ? searchInput.value.toLowerCase().trim() : '';
+
+    var bapbList = [];
+    try {
+        bapbList = JSON.parse(localStorage.getItem('pbm_bapb_db') || '[]');
+    } catch(e) { bapbList = []; }
+
+    if (query) {
+        bapbList = bapbList.filter(function(item) {
+            return (item.number && item.number.toLowerCase().includes(query)) ||
+                   (item.pihak2Client && item.pihak2Client.toLowerCase().includes(query)) ||
+                   (item.refInvoice && item.refInvoice.toLowerCase().includes(query)) ||
+                   (item.pihak1Name && item.pihak1Name.toLowerCase().includes(query));
+        });
+    }
+
+    if (!bapbList || bapbList.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding: 32px; color: var(--text-muted);">' +
+            '<i class="fa-solid fa-folder-open" style="font-size: 2.2rem; margin-bottom: 8px; opacity: 0.35; display: block;"></i>' +
+            'Belum ada riwayat Berita Acara tersimpan.' +
+            '</td></tr>';
+        return;
+    }
+
+    var html = '';
+    bapbList.forEach(function(item, idx) {
+        var itemCount = item.items ? item.items.length : 0;
+        var dateFormatted = item.date ? new Date(item.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '-';
+        var encodedItem = encodeURIComponent(JSON.stringify(item));
+
+        html += '<tr>' +
+            '<td style="text-align:center; font-weight:600; color:var(--text-muted);">' + (idx + 1) + '</td>' +
+            '<td><span class="invoice-badge" style="background:rgba(99,102,241,0.1); color:#6366f1; font-weight:700; padding:4px 10px; border-radius:6px; font-size:12px;">' + (item.number || '-') + '</span></td>' +
+            '<td><i class="fa-regular fa-calendar" style="margin-right:5px; color:var(--text-muted);"></i>' + dateFormatted + '</td>' +
+            '<td>' + (item.refInvoice ? '<span class="badge" style="background:rgba(16,185,129,0.1); color:#10b981; font-weight:600;">' + item.refInvoice + '</span>' : '<span style="color:var(--text-muted);">-</span>') + '</td>' +
+            '<td><div style="font-weight:600; font-size:13px;">' + (item.pihak1Company || 'CV PUTRA BANUA MANDIRI') + '</div><div style="font-size:11px; color:var(--text-muted);">' + (item.pihak1Name || '') + '</div></td>' +
+            '<td><div style="font-weight:600; font-size:13px; color:var(--text-main);">' + (item.pihak2Client || '-') + '</div><div style="font-size:11px; color:var(--text-muted);">' + (item.pihak2Name || '') + '</div></td>' +
+            '<td style="text-align:center;"><span class="badge" style="background:rgba(245,158,11,0.12); color:#f59e0b; font-weight:700; font-size:11px;">' + itemCount + ' Item</span></td>' +
+            '<td style="text-align:center;">' +
+                '<div style="display:flex; gap:6px; justify-content:center;">' +
+                    '<button type="button" class="btn btn-sm btn-outline" style="padding:4px 8px;" onclick="loadBapbToForm(\'' + encodedItem + '\')" title="Muat ke Form / Edit"><i class="fa-solid fa-folder-open"></i></button>' +
+                    '<button type="button" class="btn btn-sm btn-rekap-pdf" style="padding:4px 8px;" onclick="downloadBapbPdfFromHistory(\'' + encodedItem + '\')" title="Download PDF"><i class="fa-solid fa-file-pdf"></i></button>' +
+                    '<button type="button" class="btn btn-sm btn-danger" style="padding:4px 8px;" onclick="deleteBapbRecord(\'' + (item.number||'') + '\')" title="Hapus Riwayat"><i class="fa-solid fa-trash"></i></button>' +
+                '</div>' +
+            '</td>' +
+        '</tr>';
+    });
+
+    tbody.innerHTML = html;
+}
+window.renderBapbHistoryTable = renderBapbHistoryTable;
+
+window.loadBapbToForm = function(encodedItem) {
+    try {
+        var item = JSON.parse(decodeURIComponent(encodedItem));
+        if (!item) return;
+        var setVal = function(id, val) { var el = document.getElementById(id); if (el) el.value = val || ''; };
+        setVal('bapb-number', item.number);
+        setVal('bapb-date', item.date);
+        setVal('bapb-ref-invoice', item.refInvoice);
+        setVal('bapb-pihak1-company', item.pihak1Company);
+        setVal('bapb-pihak1-name', item.pihak1Name);
+        setVal('bapb-pihak1-role', item.pihak1Role);
+        setVal('bapb-pihak2-client', item.pihak2Client);
+        setVal('bapb-pihak2-address', item.pihak2Address);
+        setVal('bapb-pihak2-name', item.pihak2Name);
+        setVal('bapb-pihak2-role', item.pihak2Role);
+        setVal('bapb-notes', item.notes);
+
+        var tbody = document.getElementById('bapb-items-tbody');
+        if (tbody) {
+            tbody.innerHTML = '';
+            _bapbItemCounter = 0;
+            if (item.items && Array.isArray(item.items) && item.items.length > 0) {
+                item.items.forEach(function(it) {
+                    addBapbItemRow(it);
+                });
+            } else {
+                addBapbItemRow();
+            }
+        }
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        showToast('Data BA ' + item.number + ' dimuat ke form.', 'info');
+    } catch(err) {
+        console.error('Error loading BAPB to form:', err);
+        showToast('Gagal memuat data BA.', 'error');
+    }
+};
+
+window.downloadBapbPdfFromHistory = function(encodedItem) {
+    try {
+        var item = JSON.parse(decodeURIComponent(encodedItem));
+        if (!item) return;
+        if (typeof generateBapbPDF === 'function') {
+            generateBapbPDF(item);
+        }
+    } catch(err) {
+        console.error('Error downloading BAPB PDF from history:', err);
+        showToast('Gagal memuat PDF.', 'error');
+    }
+};
+
+window.deleteBapbRecord = async function(number) {
+    if (!number) return;
+    var confirmed = await showConfirm('Hapus Riwayat BA?', 'Apakah Anda yakin ingin menghapus ' + number + ' dari riwayat database?',
+        { type: 'danger', confirmText: 'Ya, Hapus', icon: 'fa-trash' });
+    if (!confirmed) return;
+    try {
+        var db = JSON.parse(localStorage.getItem('pbm_bapb_db') || '[]');
+        db = db.filter(function(b){ return b.number !== number; });
+        localStorage.setItem('pbm_bapb_db', JSON.stringify(db));
+        showToast('Riwayat ' + number + ' berhasil dihapus.', 'success');
+        renderBapbHistoryTable();
+    } catch(err) {
+        showToast('Gagal menghapus riwayat.', 'error');
+    }
+};

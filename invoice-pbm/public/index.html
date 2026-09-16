@@ -69,6 +69,7 @@
                 <a href="#" id="nav-analytics"><i class="fa-solid fa-chart-line"></i> Analitik Bisnis</a>
                 <a href="#" id="nav-create"><i class="fa-solid fa-plus"></i> Invoice Reguler</a>
                 <a href="#" id="nav-create-rental"><i class="fa-solid fa-truck-ramp-box"></i> Invoice Sewa</a>
+                <a href="#" id="nav-bapb" onclick="showBapbView(); return false;"><i class="fa-solid fa-file-signature"></i> BA Pengembalian Barang</a>
                 <a href="#" id="nav-activity-log" class="nav-activity-btn" onclick="toggleActivityPanel(true); closeMobileSidebar(); return false;">
                     <i class="fa-solid fa-clock-rotate-left"></i> Riwayat Aktivitas
                     <span class="activity-badge" id="activity-badge"></span>
@@ -87,8 +88,15 @@
                     <h1>Sistem Pengelola Invoice</h1>
                     <p>Buat, Kelola, dan Bagikan Tagihan Profesional Anda secara real-time</p>
                 </div>
-                <!-- Notification Bell -->
-                <div class="notif-wrapper" id="notif-wrapper">
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <!-- Tombol Sensor Nominal Uang (Privacy Mode) -->
+                    <button class="btn btn-outline" id="privacy-toggle-btn" onclick="togglePrivacyMode()" title="Sensorkan/Sembunyikan Nominal Uang" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; font-size: 0.85rem; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                        <i class="fa-solid fa-eye" id="privacy-toggle-icon"></i>
+                        <span id="privacy-toggle-text">Sensor: Off</span>
+                    </button>
+
+                    <!-- Notification Bell -->
+                    <div class="notif-wrapper" id="notif-wrapper">
                     <button class="notif-bell-btn" id="notif-bell-btn" onclick="toggleNotifPanel()" title="Notifikasi">
                         <i class="fa-solid fa-bell"></i>
                         <span class="notif-badge" id="notif-badge" style="display:none;">0</span>
@@ -152,7 +160,7 @@
                         <div class="quickbanner-icon"><i class="fa-solid fa-chart-pie"></i></div>
                         <div>
                             <h4>Analitik Bisnis & Laporan Rekap PDF</h4>
-                            <p>Lihat grafik tren omset bulanan, komposisi sewa/reguler, dan unduh laporan rekapitulasi PDF resmi PT Putra Banua Mandiri.</p>
+                            <p>Lihat grafik tren omset bulanan, komposisi sewa/reguler, dan unduh laporan rekapitulasi PDF resmi CV Putra Banua Mandiri.</p>
                         </div>
                     </div>
                     <button class="btn btn-primary btn-analytics-shortcut" onclick="switchView('analytics'); renderAnalyticsDashboard();">
@@ -218,9 +226,9 @@
                 <!-- Company Header Banner -->
                 <div class="analytics-banner">
                     <div class="analytics-brand-left">
-                        <img src="./logo.png" alt="PT PUTRA BANUA MANDIRI" class="analytics-company-logo" />
+                        <img src="./logo.png" alt="CV PUTRA BANUA MANDIRI" class="analytics-company-logo" />
                         <div>
-                            <div class="analytics-company-title">PT PUTRA BANUA MANDIRI</div>
+                            <div class="analytics-company-title">CV PUTRA BANUA MANDIRI</div>
                             <h2><i class="fa-solid fa-chart-line text-indigo"></i> Analitik & Laporan Keuangan</h2>
                             <p class="analytics-subtitle">Ringkasan kesehatan bisnis, estimasi arus kas, dan laporan performa piutang</p>
                         </div>
@@ -504,10 +512,203 @@
                 <div id="scanning-overlay" class="scanning-overlay" style="display: none;">
                     <div class="ai-icon-pulse"><i class="fa-solid fa-microchip"></i></div>
                     <div id="scan-main-text" class="scanning-text">Gemini AI is analyzing your PDF...</div>
-                    <div id="scan-sub-text" class="scanning-subtext">Mempersiapkan proses...</div>
                 </div>
             </div>
-            
+
+            <!-- View Berita Acara Pengembalian Barang (BAPB) -->
+            <div id="view-bapb" class="view-section" style="display:none;">
+                <!-- Header Banner BAPB -->
+                <div class="analytics-banner" style="margin-bottom: 20px;">
+                    <div class="analytics-brand-left">
+                        <img src="./logo.png" alt="CV PUTRA BANUA MANDIRI" class="analytics-company-logo" />
+                        <div>
+                            <div class="analytics-company-title">CV PUTRA BANUA MANDIRI</div>
+                            <h2><i class="fa-solid fa-file-signature text-indigo"></i> Berita Acara Pengembalian Barang</h2>
+                            <p class="analytics-subtitle">Dokumen serah terima pengembalian barang CV Putra Banua Mandiri</p>
+                        </div>
+                    </div>
+                    <div class="analytics-actions-right">
+                        <button class="btn btn-outline" onclick="showBapbMode('invoice')">
+                            <i class="fa-solid fa-list-check"></i> Dari Invoice Sewa
+                        </button>
+                        <button class="btn btn-outline" onclick="showBapbMode('manual')">
+                            <i class="fa-solid fa-pen"></i> Buat Manual
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Form Card BAPB -->
+                <div class="form-container">
+                    <!-- Source Selection Bar -->
+                    <div class="bapb-source-card" style="margin-bottom: 20px; padding: 14px 18px; background: var(--bg-color); border: 1px solid var(--border); border-radius: 12px;">
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+                            <div>
+                                <label style="font-weight:700; font-size:13px; color:var(--text-main);"><i class="fa-solid fa-file-invoice text-indigo"></i> Berdasarkan Invoice Sewa yang Ada:</label>
+                                <p style="font-size:12px; color:var(--text-muted); margin:2px 0 0 0;">Pilih invoice sewa untuk mengisi otomatis data klien, alamat, PO, site, dan daftar barang.</p>
+                            </div>
+                            <select id="bapb-select-invoice" class="input-field" style="max-width: 320px; font-weight:600;" onchange="handleBapbInvoiceSelect(this.value)">
+                                <option value="">-- Pilih Invoice Sewa --</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <form id="bapb-form" onsubmit="handleBapbSubmit(event)">
+                        <!-- Section 1: Detail Dokumen & Pihak -->
+                        <div class="form-section">
+                            <h4 class="section-title"><i class="fa-solid fa-circle-info"></i> Informasi Dokumen & Serah Terima</h4>
+                            <div class="form-grid-3">
+                                <div class="form-group">
+                                    <label for="bapb-number">No. Berita Acara <span class="required">*</span></label>
+                                    <input type="text" id="bapb-number" required placeholder="BAPB/PBM/2026/09/001" />
+                                </div>
+                                <div class="form-group">
+                                    <label for="bapb-date">Tanggal Pengembalian <span class="required">*</span></label>
+                                    <input type="date" id="bapb-date" required />
+                                </div>
+                                <div class="form-group">
+                                    <label for="bapb-ref-invoice">No. Referensi Invoice Sewa</label>
+                                    <input type="text" id="bapb-ref-invoice" placeholder="SW-2026-001 (opsional)" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Section 2: Informasi Pihak Pertama & Pihak Kedua -->
+                        <div class="form-section">
+                            <div class="analytics-grid-2col">
+                                <!-- Pihak Pertama (PBM) -->
+                                <div style="background:var(--bg-color); padding:16px; border-radius:12px; border:1px solid var(--border);">
+                                    <h4 style="font-size:13px; font-weight:700; color:var(--primary); margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+                                        <i class="fa-solid fa-building-user"></i> PIHAK PERTAMA (Yang Menyerahkan / PBM)
+                                    </h4>
+                                    <div class="form-group">
+                                        <label for="bapb-pihak1-company">Nama Perusahaan</label>
+                                        <input type="text" id="bapb-pihak1-company" value="CV PUTRA BANUA MANDIRI" placeholder="Nama Perusahaan Pihak Pertama" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="bapb-pihak1-name">Nama Petugas / Penanggung Jawab <span class="required">*</span></label>
+                                        <input type="text" id="bapb-pihak1-name" required placeholder="Nama Petugas PBM" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="bapb-pihak1-role">Jabatan (Opsional)</label>
+                                        <input type="text" id="bapb-pihak1-role" placeholder="Contoh: Petugas Logistik / Admin (boleh kosong)" />
+                                    </div>
+                                </div>
+
+                                <!-- Pihak Kedua (Pelanggan) -->
+                                <div style="background:var(--bg-color); padding:16px; border-radius:12px; border:1px solid var(--border);">
+                                    <h4 style="font-size:13px; font-weight:700; color:#10b981; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+                                        <i class="fa-solid fa-user-check"></i> PIHAK KEDUA (Yang Menerima / Pelanggan)
+                                    </h4>
+                                    <div class="form-group">
+                                        <label for="bapb-pihak2-client">Nama Perusahaan / Klien <span class="required">*</span></label>
+                                        <input type="text" id="bapb-pihak2-client" required placeholder="Nama Klien / Perusahaan Mitra" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="bapb-pihak2-address">Alamat & Lokasi Site</label>
+                                        <input type="text" id="bapb-pihak2-address" placeholder="Alamat / Site Proyek" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="bapb-pihak2-name">Nama Perwakilan Pelanggan</label>
+                                        <input type="text" id="bapb-pihak2-name" placeholder="Nama Penerima / Perwakilan Klien" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="bapb-pihak2-role">Jabatan Perwakilan (Opsional)</label>
+                                        <input type="text" id="bapb-pihak2-role" placeholder="Contoh: Site Manager / Supervisor (boleh kosong)" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Section 3: Tabel Daftar Barang Dikembalikan -->
+                        <div class="items-section" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border);">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
+                                <h4 style="margin:0; font-size: 1.05rem; font-weight:700; color:var(--text-main); display:flex; align-items:center; gap:8px;">
+                                    <i class="fa-solid fa-boxes-packing text-indigo"></i> Daftar Barang yang Dikembalikan
+                                </h4>
+                                <button type="button" class="btn btn-primary btn-sm" onclick="addBapbItemRow(); return false;" style="padding: 7px 16px; font-weight:600; display:inline-flex; align-items:center; gap:6px;">
+                                    <i class="fa-solid fa-plus"></i> Tambah Barang
+                                </button>
+                            </div>
+                            <div class="table-responsive" style="background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow-x:auto;">
+                                <table class="data-table" id="bapb-items-table" style="width:100%; border-collapse:collapse;">
+                                    <thead>
+                                        <tr style="background:var(--surface-hover); border-bottom:1px solid var(--border);">
+                                            <th style="width: 45px; text-align:center; padding:10px 8px; font-size:12px; font-weight:700; color:var(--text-muted);">No</th>
+                                            <th style="padding:10px 8px; font-size:12px; font-weight:700; color:var(--text-muted);">Nama Barang / Peralatan <span class="required">*</span></th>
+                                            <th style="width: 100px; padding:10px 8px; font-size:12px; font-weight:700; color:var(--text-muted);">Jumlah</th>
+                                            <th style="width: 100px; padding:10px 8px; font-size:12px; font-weight:700; color:var(--text-muted);">Satuan</th>
+                                            <th style="width: 150px; padding:10px 8px; font-size:12px; font-weight:700; color:var(--text-muted);">Kondisi Barang</th>
+                                            <th style="padding:10px 8px; font-size:12px; font-weight:700; color:var(--text-muted);">Catatan / Keterangan</th>
+                                            <th style="width: 50px; text-align:center; padding:10px 8px; font-size:12px; font-weight:700; color:var(--text-muted);">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="bapb-items-tbody">
+                                        <!-- JS injects rows -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Section 4: Catatan Serah Terima -->
+                        <div class="form-section">
+                            <h4 class="section-title"><i class="fa-solid fa-comment-dots"></i> Catatan Serah Terima & Ketentuan</h4>
+                            <div class="form-group">
+                                <textarea id="bapb-notes" rows="3" placeholder="Contoh: Seluruh peralatan di atas telah diperiksa bersama dan diserahterimakan kembali dalam keadaan lengkap sesuai kondisi yang tercantum."></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Submit / Action Buttons -->
+                        <div class="form-actions" style="margin-top: 24px; gap: 12px; flex-wrap: wrap;">
+                            <button type="button" class="btn btn-outline" onclick="resetBapbForm()">
+                                <i class="fa-solid fa-rotate-left"></i> Reset Form
+                            </button>
+                            <button type="button" class="btn btn-rekap-pdf" onclick="downloadCurrentBapbPDF()">
+                                <i class="fa-solid fa-file-pdf"></i> Download PDF Berita Acara
+                            </button>
+                            <button type="submit" class="btn btn-primary" id="bapb-submit-btn">
+                                <i class="fa-solid fa-floppy-disk"></i> Simpan Berita Acara
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Card Riwayat Berita Acara -->
+                <div class="form-container" style="margin-top: 30px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 20px;">
+                        <div>
+                            <h3 style="margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+                                <i class="fa-solid fa-clock-rotate-left text-indigo"></i> Riwayat Berita Acara Pengembalian Barang
+                            </h3>
+                            <p style="margin: 4px 0 0; font-size: 0.85rem; color: var(--text-muted);">Daftar seluruh Berita Acara yang telah dibuat & tersimpan di database</p>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                            <input type="text" id="bapb-history-search" class="input-field" placeholder="Cari No. BA / Klien..." style="max-width: 220px; font-size: 0.85rem; padding: 6px 12px;" oninput="renderBapbHistoryTable()" />
+                            <button type="button" class="btn btn-outline btn-sm" onclick="renderBapbHistoryTable()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="data-table" id="bapb-history-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 45px; text-align: center;">No</th>
+                                    <th>No. Berita Acara</th>
+                                    <th>Tanggal</th>
+                                    <th>Ref. Invoice</th>
+                                    <th>Pihak I (PBM)</th>
+                                    <th>Pihak II (Klien)</th>
+                                    <th style="text-align: center;">Jml Barang</th>
+                                    <th style="text-align: center; width: 140px;">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bapb-history-tbody">
+                                <!-- JS generated BAPB history rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
             <!-- Toast Notification Container -->
             <div id="toast-container"></div>
 
