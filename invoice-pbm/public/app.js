@@ -53,24 +53,15 @@ window.togglePrivacyMode = function() {
 window.updatePrivacyUI = function() {
     const btn = document.getElementById('privacy-toggle-btn');
     const icon = document.getElementById('privacy-toggle-icon');
-    const text = document.getElementById('privacy-toggle-text');
-    if (!btn || !icon || !text) return;
+    if (!btn || !icon) return;
     if (isPrivacyMode) {
         icon.className = 'fa-solid fa-eye-slash';
-        text.textContent = 'Sensor: On';
-        btn.classList.add('btn-warning');
-        btn.classList.remove('btn-outline');
-        btn.style.background = 'rgba(245, 158, 11, 0.2)';
-        btn.style.borderColor = '#f59e0b';
-        btn.style.color = '#fbbf24';
+        btn.title = 'Sensor Uang: AKTIF (Klik untuk nonaktifkan)';
+        btn.classList.add('privacy-active');
     } else {
         icon.className = 'fa-solid fa-eye';
-        text.textContent = 'Sensor: Off';
-        btn.classList.remove('btn-warning');
-        btn.classList.add('btn-outline');
-        btn.style.background = '';
-        btn.style.borderColor = '';
-        btn.style.color = '';
+        btn.title = 'Sensor Uang: NONAKTIF (Klik untuk aktifkan)';
+        btn.classList.remove('privacy-active');
     }
 };
 

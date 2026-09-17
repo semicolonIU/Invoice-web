@@ -90,26 +90,26 @@
                     <h1>Sistem Pengelola Invoice</h1>
                     <p>Buat, Kelola, dan Bagikan Tagihan Profesional Anda secara real-time</p>
                 </div>
-                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                    <!-- Tombol Sensor Nominal Uang (Privacy Mode) -->
-                    <button class="btn btn-outline" id="privacy-toggle-btn" onclick="togglePrivacyMode()" title="Sensorkan/Sembunyikan Nominal Uang" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; font-size: 0.85rem; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                <div class="header-icon-group">
+                    <!-- Tombol Sensor Nominal Uang (Icon Only) -->
+                    <button class="notif-bell-btn" id="privacy-toggle-btn" onclick="togglePrivacyMode()" title="Sensor Uang: NONAKTIF (Klik untuk aktifkan)">
                         <i class="fa-solid fa-eye" id="privacy-toggle-icon"></i>
-                        <span id="privacy-toggle-text">Sensor: Off</span>
                     </button>
 
                     <!-- Notification Bell -->
                     <div class="notif-wrapper" id="notif-wrapper">
-                    <button class="notif-bell-btn" id="notif-bell-btn" onclick="toggleNotifPanel()" title="Notifikasi">
-                        <i class="fa-solid fa-bell"></i>
-                        <span class="notif-badge" id="notif-badge" style="display:none;">0</span>
-                    </button>
-                    <div class="notif-panel" id="notif-panel">
-                        <div class="notif-panel-header">
-                            <span><i class="fa-solid fa-bell"></i> Notifikasi</span>
-                            <button class="notif-clear-btn" onclick="clearNotifications()" title="Tandai semua sudah dibaca"><i class="fa-solid fa-check-double"></i></button>
-                        </div>
-                        <div class="notif-list" id="notif-list">
-                            <div class="notif-empty"><i class="fa-solid fa-inbox"></i><br>Tidak ada notifikasi</div>
+                        <button class="notif-bell-btn" id="notif-bell-btn" onclick="toggleNotifPanel()" title="Notifikasi">
+                            <i class="fa-solid fa-bell"></i>
+                            <span class="notif-badge" id="notif-badge" style="display:none;">0</span>
+                        </button>
+                        <div class="notif-panel" id="notif-panel">
+                            <div class="notif-panel-header">
+                                <span><i class="fa-solid fa-bell text-indigo"></i> Notifikasi</span>
+                                <button class="notif-clear-btn" onclick="clearNotifications()" title="Tandai semua sudah dibaca"><i class="fa-solid fa-check-double"></i> Read All</button>
+                            </div>
+                            <div class="notif-list" id="notif-list">
+                                <div class="notif-empty"><i class="fa-solid fa-inbox"></i><br>Tidak ada notifikasi</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -213,7 +213,7 @@
                                 <th class="sortable" onclick="handleSort('NoInvoice')">No. Invoice <i class="fa-solid fa-sort sort-icon" id="sort-icon-NoInvoice"></i></th>
                                 <th class="sortable" onclick="handleSort('clientName')">Klien <i class="fa-solid fa-sort sort-icon" id="sort-icon-clientName"></i></th>
                                 <th>Keterangan Item</th>
-                                <th class="sortable" onclick="handleSort('date')">Tanggal Invoice <i class="fa-solid fa-sort sort-icon" id="sort-icon-date"></i></th>
+                                <th class="sortable" onclick="handleSort('date')" style="line-height: 1.25; vertical-align: middle;">Tanggal<br>Invoice <i class="fa-solid fa-sort sort-icon" id="sort-icon-date"></i></th>
                                 <th class="sortable active-sort" onclick="handleSort('$createdAt')">Dibuat Pada <i class="fa-solid fa-sort-down sort-icon" id="sort-icon-$createdAt"></i></th>
                                 <th class="sortable" onclick="handleSort('totalAmount')">Total (Rp) <i class="fa-solid fa-sort sort-icon" id="sort-icon-totalAmount"></i></th>
                                 <th>Status</th>
