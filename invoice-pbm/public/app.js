@@ -13,7 +13,7 @@ let itemsPerPage = 10;
 let totalItems = 0;
 let statsData = []; // Cache for stats and metadata
 let searchDebounceTimer = null; // Debounce timer for search
-let currentSortBy = 'date';
+let currentSortBy = '$createdAt';
 let currentSortDir = 'desc';
 let currentTypeFilter = 'all';
 let isPrivacyMode = localStorage.getItem('pbm_privacy_mode') === 'true';
@@ -530,7 +530,8 @@ window.setFormType = function(type) {
     if (rentalBtn) rentalBtn.classList.toggle('active', isRental);
     
     // Update Sidebar Navigation Active State
-    if (navs.create) navs.create.classList.toggle('active', !isRental);
+    const navs = typeof getNavs === 'function' ? getNavs() : {};
+    if (navs && navs.create) navs.create.classList.toggle('active', !isRental);
     const navRental = document.getElementById('nav-create-rental');
     if (navRental) navRental.classList.toggle('active', isRental);
 
@@ -1130,7 +1131,7 @@ async function loadInvoices(page = 1) {
     const typeFilter = currentTypeFilter;
     
     try {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center loading-text"><i class="fa-solid fa-spinner fa-spin"></i> Memuat data tagihan...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center loading-text"><i class="fa-solid fa-spinner fa-spin"></i> Memuat data tagihan...</td></tr>';
         
         const result = await API.getInvoices(itemsPerPage, offset, searchQuery, typeFilter, currentSortBy, currentSortDir);
         currentInvoices = result.documents;
@@ -1152,7 +1153,7 @@ async function loadInvoices(page = 1) {
         }
         
     } catch (e) {
-        tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color:var(--danger)"><i class="fa-solid fa-triangle-exclamation"></i> Error Koneksi: ${e.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center" style="color:var(--danger)"><i class="fa-solid fa-triangle-exclamation"></i> Error Koneksi: ${e.message}</td></tr>`;
     }
 }
 
@@ -1315,6 +1316,31 @@ window.setFilterType = function(type) {
     filterInvoices();
 }
 
+window.handleSortSelect = function(value) {
+    if (!value) return;
+    const parts = value.split('_');
+    currentSortBy = parts[0];
+    currentSortDir = parts[1] || 'desc';
+    
+    // Update table header icons
+    document.querySelectorAll('th.sortable').forEach(th => {
+        th.classList.remove('active-sort');
+        const icon = th.querySelector('.sort-icon');
+        if (icon) icon.className = 'fa-solid fa-sort sort-icon';
+    });
+    
+    const activeTh = document.querySelector(`th[onclick="handleSort('${currentSortBy}')"]`);
+    if (activeTh) {
+        activeTh.classList.add('active-sort');
+        const activeIcon = activeTh.querySelector('.sort-icon');
+        if (activeIcon) {
+            activeIcon.className = `fa-solid fa-sort-${currentSortDir === 'desc' ? 'down' : 'up'} sort-icon`;
+        }
+    }
+
+    loadInvoices(1);
+};
+
 window.handleSort = function(column) {
     if (currentSortBy === column) {
         currentSortDir = currentSortDir === 'desc' ? 'asc' : 'desc';
@@ -1323,6 +1349,14 @@ window.handleSort = function(column) {
         currentSortDir = 'desc'; // default when changing column
     }
     
+    // Sync select dropdown if matching option exists
+    const sortSelect = document.getElementById('sort-select');
+    if (sortSelect) {
+        const targetVal = `${currentSortBy}_${currentSortDir}`;
+        const matchOpt = Array.from(sortSelect.options).find(opt => opt.value === targetVal);
+        if (matchOpt) sortSelect.value = targetVal;
+    }
+
     // Update UI icons
     document.querySelectorAll('th.sortable').forEach(th => {
         th.classList.remove('active-sort');
@@ -1340,7 +1374,7 @@ window.handleSort = function(column) {
     }
     
     loadInvoices(1);
-}
+};
 
 window.filterInvoices = function() {
     const searchInput = document.getElementById('search-input');
@@ -1389,12 +1423,13 @@ function renderInvoiceTable(docs) {
     // sehingga totalItems sudah akurat untuk pagination dan semua halaman tersortir secara konsisten.
 
     if (items.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center" style="color:var(--text-muted)">Data tidak ditemukan.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center" style="color:var(--text-muted)">Data tidak ditemukan.</td></tr>';
         return;
     }
 
     tbody.innerHTML = '';
     items.forEach(({ invoice, isRental, itemKeterangan }) => {
+        const createdDateStr = invoice.$createdAt ? new Date(invoice.$createdAt).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>
@@ -1404,6 +1439,7 @@ function renderInvoiceTable(docs) {
             <td>${Array.isArray(invoice.clientName) ? invoice.clientName[0] : invoice.clientName}</td>
             <td style="font-size:0.85em;">${itemKeterangan}</td>
             <td>${new Date(invoice.date).toLocaleDateString('id-ID')}</td>
+            <td style="font-size:0.85em; color:var(--text-muted);">${createdDateStr}</td>
             <td style="font-weight:600; color:var(--text-main)">${formatRupiah(invoice.totalAmount)}</td>
             <td>
                 <select class="status-select status-${invoice.paymentStatus || 'pending'}" onchange="updatePaymentStatus('${invoice.$id}', this.value); this.className='status-select status-'+this.value;">
@@ -2195,131 +2231,288 @@ window.generateInvNumber = function(prefix) {
     document.getElementById('inv-number').value = `${prefixStr}${yStr}${mStr}${rand4}`;
 };
 
+// ── Gemini API config (client-side, Gemini 3.5 Flash Lite) ────────────────
+const GEMINI_API_KEY = 'AIzaSyDIwa7qO-bASLVwOYoub-XJXQEm4AeCPgE';
+const GEMINI_MODEL   = 'gemini-3.5-flash-lite';
+const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+
+// Pure JS instant text extraction from PDF stream (0.1ms, zero worker overhead)
+function extractPdfTextPureJs(arrayBuffer) {
+    try {
+        const bytes = new Uint8Array(arrayBuffer);
+        let str = '';
+        const len = bytes.length;
+        // Limit string scanning to first 500KB for speed
+        const scanLen = Math.min(len, 500000);
+        for (let i = 0; i < scanLen; i++) {
+            str += String.fromCharCode(bytes[i]);
+        }
+        const textMatches = [];
+        const tjRegex = /\(([^)]+)\)\s*Tj/g;
+        let match;
+        while ((match = tjRegex.exec(str)) !== null) {
+            if (match[1] && match[1].trim().length > 0) {
+                textMatches.push(match[1]);
+            }
+        }
+        const arrayTjRegex = /\[\s*((?:\((?:[^)]+)\)\s*)*)\]\s*TJ/g;
+        while ((match = arrayTjRegex.exec(str)) !== null) {
+            const inner = match[1];
+            const innerRegex = /\(([^)]+)\)/g;
+            let innerMatch;
+            let combined = '';
+            while ((innerMatch = innerRegex.exec(inner)) !== null) {
+                combined += innerMatch[1];
+            }
+            if (combined.trim().length > 0) {
+                textMatches.push(combined);
+            }
+        }
+        return textMatches.join(' ').replace(/\s+/g, ' ').trim();
+    } catch (e) {
+        console.warn('Pure JS PDF text extraction failed:', e);
+        return '';
+    }
+}
+
+// Ultra-fast Gemini AI call using extracted text (1-2s total response time)
+async function callGeminiText(pdfText) {
+    const prompt = `You are an expert invoice data extractor. Read the invoice text below and return ONLY a valid JSON object — no markdown formatting, no explanation.
+
+Rules:
+- clientName: the client/buyer company name. NEVER use "PUTRA BANUA MANDIRI" (that is the vendor/seller).
+- clientAddress: use address labelled "ALAMAT PENGIRIMAN BARANG" or buyer address if present.
+- price: integer (strip Rp and dots/commas, e.g. 5000000).
+- tb: Tugboat name (e.g. TB KSA-01). bg: Barge name (e.g. BG 3001). desc: extra description.
+- type: "rental" if sewa/rental is mentioned in invoice title or items, else "normal".
+- items: array of objects, one per line item — do NOT merge multiple items into one.
+
+JSON schema:
+{"clientName":"","clientAddress":"","noPo":"","site":"","date":"YYYY-MM-DD","type":"normal","items":[{"name":"","qty":1,"price":0,"tb":"","bg":"","desc":""}]}
+
+INVOICE TEXT:
+${pdfText.slice(0, 4000)}`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25-second timeout for text
+
+    try {
+        const res = await fetch(GEMINI_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal,
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                    responseMimeType: 'application/json',
+                    temperature: 0,
+                    maxOutputTokens: 1024
+                }
+            })
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!res.ok) {
+            const errBody = await res.json().catch(() => ({}));
+            const msg = errBody?.error?.message || res.statusText;
+            if (res.status === 429) throw new Error('Rate limit Gemini AI. Tunggu beberapa detik lalu coba lagi.');
+            throw new Error(`Gemini AI error (${res.status}): ${msg}`);
+        }
+
+        const json = await res.json();
+        let text = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        text = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+        return JSON.parse(text);
+    } catch (err) {
+        clearTimeout(timeoutId);
+        if (err.name === 'AbortError') {
+            throw new Error('Respon Gemini AI terlalu lama (timeout 25 detik). Coba upload lagi.');
+        }
+        throw err;
+    }
+}
+
+// Fallback: Gemini Multimodal PDF Base64 call (for image/scanned PDFs)
+async function callGeminiPdfBase64(base64Data) {
+    const prompt = `You are an expert invoice data extractor. Read the attached PDF invoice document (both text and visual layout) and extract the invoice fields into ONLY a valid JSON object — no markdown formatting, no explanation.
+
+Rules:
+- clientName: the client/buyer company name. NEVER use "PUTRA BANUA MANDIRI" (that is the vendor/seller).
+- clientAddress: use address labelled "ALAMAT PENGIRIMAN BARANG" or buyer address if present.
+- price: integer (strip Rp and dots/commas, e.g. 5000000).
+- tb: Tugboat name (e.g. TB KSA-01). bg: Barge name (e.g. BG 3001). desc: extra description.
+- type: "rental" if sewa/rental is mentioned in invoice title or items, else "normal".
+- items: array of objects, one per line item — do NOT merge multiple items into one.
+
+JSON schema:
+{"clientName":"","clientAddress":"","noPo":"","site":"","date":"YYYY-MM-DD","type":"normal","items":[{"name":"","qty":1,"price":0,"tb":"","bg":"","desc":""}]}`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45-second timeout for base64 OCR
+
+    try {
+        const res = await fetch(GEMINI_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal,
+            body: JSON.stringify({
+                contents: [{
+                    parts: [
+                        {
+                            inlineData: {
+                                mimeType: "application/pdf",
+                                data: base64Data
+                            }
+                        },
+                        { text: prompt }
+                    ]
+                }],
+                generationConfig: {
+                    responseMimeType: 'application/json',
+                    temperature: 0,
+                    maxOutputTokens: 1024
+                }
+            })
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!res.ok) {
+            const errBody = await res.json().catch(() => ({}));
+            const msg = errBody?.error?.message || res.statusText;
+            if (res.status === 429) throw new Error('Rate limit Gemini AI. Tunggu beberapa detik lalu coba lagi.');
+            throw new Error(`Gemini AI error (${res.status}): ${msg}`);
+        }
+
+        const json = await res.json();
+        let text = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        text = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+        return JSON.parse(text);
+    } catch (err) {
+        clearTimeout(timeoutId);
+        if (err.name === 'AbortError') {
+            throw new Error('Respon Gemini AI terlalu lama (timeout 45 detik). Coba upload lagi.');
+        }
+        throw err;
+    }
+}
+
 window.handlePdfScan = async function(input) {
     const file = input.files[0];
     if (!file) return;
 
-    const overlay = document.getElementById('scanning-overlay');
-    const mainText = document.getElementById('scan-main-text');
-    const subText = document.getElementById('scan-sub-text');
-    
-    overlay.style.display = 'flex';
-    mainText.textContent = 'Membaca File PDF...';
-    subText.textContent = 'Mengekstrak teks menggunakan unpdf';
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+        notify('Mohon pilih file berformat PDF.', 'error');
+        input.value = '';
+        return;
+    }
 
-    const progressTimeouts = [
-        setTimeout(() => {
-            if(overlay.style.display !== 'none') {
-                mainText.textContent = 'Menghubungkan ke Gemini AI...';
-                subText.textContent = 'Mengirim data ke server Google';
-            }
-        }, 1500),
-        setTimeout(() => {
-            if(overlay.style.display !== 'none') {
-                mainText.textContent = 'Gemini sedang menganalisis...';
-                subText.textContent = 'Mengekstrak nama klien, alamat, dan tabel barang';
-            }
-        }, 3500),
-        setTimeout(() => {
-            if(overlay.style.display !== 'none') {
-                mainText.textContent = 'Memformat Data...';
-                subText.textContent = 'Mengonversi hasil ke struktur JSON (Structured Output)';
-            }
-        }, 6000)
-    ];
+    if (file.size > 15 * 1024 * 1024) {
+        notify('Ukuran file PDF terlalu besar (maksimal 15MB).', 'error');
+        input.value = '';
+        return;
+    }
+
+    const overlay  = document.getElementById('scanning-overlay');
+    const mainText = document.getElementById('scan-main-text');
+    const subText  = document.getElementById('scan-sub-text');
+
+    if (overlay) overlay.style.display = 'flex';
+    if (mainText) mainText.textContent = 'Membaca File PDF...';
+    if (subText)  subText.textContent  = 'Mengekstrak data dari dokumen';
+
+    const t1 = setTimeout(() => {
+        if (overlay && overlay.style.display !== 'none') {
+            if (mainText) mainText.textContent = 'Menghubungkan ke Gemini AI...';
+            if (subText)  subText.textContent  = 'Mengirim dokumen ke Google Gemini 3.5 Flash Lite';
+        }
+    }, 1200);
+    const t2 = setTimeout(() => {
+        if (overlay && overlay.style.display !== 'none') {
+            if (mainText) mainText.textContent = 'Gemini AI sedang menganalisis...';
+            if (subText)  subText.textContent  = 'Mengekstrak nama klien, alamat, dan rincian item';
+        }
+    }, 3000);
 
     try {
-        const formData = new FormData();
-        formData.append('file', file);
+        const arrayBuffer = await file.arrayBuffer();
+        const extractedText = extractPdfTextPureJs(arrayBuffer);
+        let data;
 
-        // Frontend & backend digabung, gunakan path relatif
-        const apiUrl = '/api/scan-pdf';
+        if (extractedText && extractedText.length > 25) {
+            console.log(`[Scan PDF] Fast Text Extraction success (${extractedText.length} chars). Sending text to Gemini AI...`);
+            if (subText) subText.textContent = 'Menghubungkan ke Gemini AI (Mode Teks Cepat)...';
+            data = await callGeminiText(extractedText);
+        } else {
+            console.log('[Scan PDF] Scanned/Image PDF detected or text empty. Falling back to Gemini Multimodal OCR...');
+            if (subText) subText.textContent = 'Menganalisis dokumen PDF dengan Gemini AI OCR...';
+            
+            const base64Data = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const res = reader.result;
+                    const base64 = typeof res === 'string' && res.includes(',') ? res.split(',')[1] : res;
+                    resolve(base64);
+                };
+                reader.onerror = () => reject(new Error('Gagal membaca file PDF lokal.'));
+                reader.readAsDataURL(file);
+            });
 
-        const response = await fetch(apiUrl, {
-            method: 'POST',
-            body: formData
-        });
-
-        const result = await response.json();
-        if (!response.ok) {
-            if (result.retryAfter) {
-                // Server told us exactly how long to wait
-                showNextJsError(`Rate limit Gemini. Tunggu ${result.retryAfter} sebelum mencoba lagi.`);
-            } else {
-                throw new Error(result.error || 'Gagal menganalisis PDF');
-            }
-            return;
+            data = await callGeminiPdfBase64(base64Data);
         }
 
-        const data = result.data;
+        // Populate form fields with safe null checks
+        if (data.type) { showCreate(data.type); highlightField('form-title'); }
 
-        // Reset form and set type FIRST before populating fields
-        if (data.type) {
-            showCreate(data.type);
-            highlightField('form-title');
-        }
+        const elClient = document.getElementById('inv-client');
+        const elWa     = document.getElementById('inv-wa');
+        const elPo     = document.getElementById('inv-po');
+        const elSite   = document.getElementById('inv-site');
+        const elDate   = document.getElementById('inv-date');
 
-        // Populate the form (NoInvoice is intentionally skipped so it keeps the website's original auto-generated number)
-        if (data.clientName) {
-            document.getElementById('inv-client').value = data.clientName;
-            highlightField('inv-client');
-        }
-        if (data.clientAddress) {
-            document.getElementById('inv-wa').value = data.clientAddress;
-            highlightField('inv-wa');
-        }
-        if (data.noPo) {
-            document.getElementById('inv-po').value = data.noPo;
-            highlightField('inv-po');
-        }
-        if (data.site) {
-            document.getElementById('inv-site').value = data.site;
-            highlightField('inv-site');
-        }
-        if (data.date) {
-            document.getElementById('inv-date').value = data.date.split('T')[0];
-            highlightField('inv-date');
-        }
-        // Notes tidak lagi di-scan oleh AI — biarkan kosong
+        if (data.clientName && elClient)    { elClient.value = data.clientName;    highlightField('inv-client'); }
+        if (data.clientAddress && elWa)     { elWa.value     = data.clientAddress; highlightField('inv-wa'); }
+        if (data.noPo && elPo)              { elPo.value     = data.noPo;          highlightField('inv-po'); }
+        if (data.site && elSite)            { elSite.value   = data.site;          highlightField('inv-site'); }
+        if (data.date && elDate)            { elDate.value   = data.date.split('T')[0]; highlightField('inv-date'); }
 
-        // Handle items
-        if (data.items && Array.isArray(data.items)) {
-            document.getElementById('items-container').innerHTML = '';
+        const itemsContainer = document.getElementById('items-container');
+        if (data.items && Array.isArray(data.items) && data.items.length > 0 && itemsContainer) {
+            itemsContainer.innerHTML = '';
             itemCount = 0;
             data.items.forEach(item => {
                 itemCount++;
                 const row = createItemRow(itemCount);
-                row.querySelector('.item-name').value = item.name || '';
-                row.querySelector('.item-qty').value = item.qty || 1;
-                row.querySelector('.item-price').value = item.price || 0;
-                if (item.tb) row.querySelector('.item-tb').value = item.tb;
-                if (item.bg) row.querySelector('.item-bg').value = item.bg;
-                if (item.desc) row.querySelector('.item-desc').value = item.desc;
-                document.getElementById('items-container').appendChild(row);
+                if (row.querySelector('.item-name'))  row.querySelector('.item-name').value  = item.name  || '';
+                if (row.querySelector('.item-qty'))   row.querySelector('.item-qty').value   = item.qty   || 1;
+                if (row.querySelector('.item-price')) row.querySelector('.item-price').value = item.price || 0;
+                if (item.tb && row.querySelector('.item-tb'))   row.querySelector('.item-tb').value   = item.tb;
+                if (item.bg && row.querySelector('.item-bg'))   row.querySelector('.item-bg').value   = item.bg;
+                if (item.desc && row.querySelector('.item-desc')) row.querySelector('.item-desc').value = item.desc;
+                itemsContainer.appendChild(row);
                 row.classList.add('scan-highlight');
             });
-            calculateTotal();
+            if (typeof calculateTotal === 'function') calculateTotal();
         }
 
-        notify('AI berhasil mengekstrak data! Silakan tinjau kembali sebelum menyimpan.', 'success');
+        notify('Gemini AI berhasil mengekstrak data PDF! Silakan tinjau kembali sebelum menyimpan.', 'success');
 
     } catch (error) {
         console.error('Scan Error:', error);
-        
-        let errorMsg = error.message;
-        if (errorMsg.includes('Failed to fetch')) {
-            errorMsg = "Server tidak merespon. Pastikan server backend Next.js berjalan.";
-        } else if (errorMsg.includes('429') || errorMsg.includes('Too Many Requests')) {
-            errorMsg = "Gemini AI terlalu banyak permintaan. Tunggu 30 detik dan coba lagi.";
+        let msg = error.message;
+        if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
+            msg = 'Tidak dapat terhubung ke Gemini AI. Periksa koneksi internet.';
         }
-        
-        notify(errorMsg, 'error', 8000);
+        notify(msg, 'error', 8000);
     } finally {
-        progressTimeouts.forEach(clearTimeout);
-        overlay.style.display = 'none';
-        input.value = ''; // Reset input
+        clearTimeout(t1);
+        clearTimeout(t2);
+        if (overlay) overlay.style.display = 'none';
+        if (input) input.value = '';
     }
 };
+
 
 function highlightField(id) {
     const el = document.getElementById(id);

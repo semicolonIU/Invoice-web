@@ -20,6 +20,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
     <!-- QRCode.js CDN (Fallback) -->
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <!-- PDF.js for client-side PDF text extraction -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 <body>
     <div id="view-login" class="login-wrapper">
@@ -176,6 +178,17 @@
                             <input type="text" id="search-input" placeholder="Cari nama klien, no invoice, atau PO..." oninput="filterInvoices()">
                             <button id="search-clear-btn" onclick="clearSearch()" title="Hapus pencarian" style="display:none;">&times;</button>
                         </div>
+                        <div class="sort-box" style="display: flex; align-items: center;">
+                            <select id="sort-select" onchange="handleSortSelect(this.value)" title="Urutkan Tabel">
+                                <option value="$createdAt_desc" selected>✨ Paling Baru Dibuat</option>
+                                <option value="$createdAt_asc">⏳ Paling Lama Dibuat</option>
+                                <option value="date_desc">📅 Tanggal Invoice (Terbaru)</option>
+                                <option value="date_asc">📅 Tanggal Invoice (Terlama)</option>
+                                <option value="clientName_asc">🏢 Nama Klien (A-Z)</option>
+                                <option value="totalAmount_desc">💰 Nominal (Tertinggi)</option>
+                                <option value="totalAmount_asc">💰 Nominal (Terrendah)</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="controls-actions">
                         <button class="btn btn-secondary btn-nav-analytics" onclick="switchView('analytics'); renderAnalyticsDashboard();">
@@ -200,14 +213,15 @@
                                 <th class="sortable" onclick="handleSort('NoInvoice')">No. Invoice <i class="fa-solid fa-sort sort-icon" id="sort-icon-NoInvoice"></i></th>
                                 <th class="sortable" onclick="handleSort('clientName')">Klien <i class="fa-solid fa-sort sort-icon" id="sort-icon-clientName"></i></th>
                                 <th>Keterangan Item</th>
-                                <th class="sortable active-sort" onclick="handleSort('date')">Tanggal <i class="fa-solid fa-sort-down sort-icon" id="sort-icon-date"></i></th>
+                                <th class="sortable" onclick="handleSort('date')">Tanggal Invoice <i class="fa-solid fa-sort sort-icon" id="sort-icon-date"></i></th>
+                                <th class="sortable active-sort" onclick="handleSort('$createdAt')">Dibuat Pada <i class="fa-solid fa-sort-down sort-icon" id="sort-icon-$createdAt"></i></th>
                                 <th class="sortable" onclick="handleSort('totalAmount')">Total (Rp) <i class="fa-solid fa-sort sort-icon" id="sort-icon-totalAmount"></i></th>
                                 <th>Status</th>
                                 <th>Aksi</th>
                             </tr>
                         </thead>
                         <tbody id="invoice-list">
-                            <tr><td colspan="7" class="text-center loading-text">Memuat data...</td></tr>
+                            <tr><td colspan="8" class="text-center loading-text">Memuat data...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -512,6 +526,7 @@
                 <div id="scanning-overlay" class="scanning-overlay" style="display: none;">
                     <div class="ai-icon-pulse"><i class="fa-solid fa-microchip"></i></div>
                     <div id="scan-main-text" class="scanning-text">Gemini AI is analyzing your PDF...</div>
+                    <div id="scan-sub-text" class="scanning-subtext" style="font-size: 13px; color: var(--text-muted); margin-top: 6px;"></div>
                 </div>
             </div>
 
