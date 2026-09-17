@@ -49,11 +49,12 @@ JSON schema:
     const apiKey = process.env.GOOGLE_API_KEY || 'AIzaSyDIwa7qO-bASLVwOYoub-XJXQEm4AeCPgE';
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-      model: 'gemini-3.5-flash-lite',
+      model: 'gemini-2.5-flash',
       generationConfig: {
         responseMimeType: 'application/json',
         temperature: 0,
-        maxOutputTokens: 1024,
+        maxOutputTokens: 600,
+        thinkingConfig: { thinkingBudget: 0 },
       },
     });
 

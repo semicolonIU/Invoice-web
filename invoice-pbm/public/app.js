@@ -2231,9 +2231,9 @@ window.generateInvNumber = function(prefix) {
     document.getElementById('inv-number').value = `${prefixStr}${yStr}${mStr}${rand4}`;
 };
 
-// ── Gemini API config (client-side, Gemini 3.5 Flash Lite) ────────────────
+// ── Gemini API config (client-side, Gemini 2.5 Flash with Zero Thinking Tokens for Maximum Speed) ──
 const GEMINI_API_KEY = 'AIzaSyDIwa7qO-bASLVwOYoub-XJXQEm4AeCPgE';
-const GEMINI_MODEL   = 'gemini-3.5-flash-lite';
+const GEMINI_MODEL   = 'gemini-2.5-flash';
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
 // Pure JS instant text extraction from PDF stream (0.1ms, zero worker overhead)
@@ -2294,7 +2294,7 @@ INVOICE TEXT:
 ${pdfText.slice(0, 4000)}`;
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25-second timeout for text
+    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20-second timeout for text
 
     try {
         const res = await fetch(GEMINI_API_URL, {
@@ -2306,7 +2306,8 @@ ${pdfText.slice(0, 4000)}`;
                 generationConfig: {
                     responseMimeType: 'application/json',
                     temperature: 0,
-                    maxOutputTokens: 1024
+                    maxOutputTokens: 600,
+                    thinkingConfig: { thinkingBudget: 0 }
                 }
             })
         });
@@ -2327,7 +2328,7 @@ ${pdfText.slice(0, 4000)}`;
     } catch (err) {
         clearTimeout(timeoutId);
         if (err.name === 'AbortError') {
-            throw new Error('Respon Gemini AI terlalu lama (timeout 25 detik). Coba upload lagi.');
+            throw new Error('Respon Gemini AI terlalu lama (timeout 20 detik). Coba upload lagi.');
         }
         throw err;
     }
@@ -2349,7 +2350,7 @@ JSON schema:
 {"clientName":"","clientAddress":"","noPo":"","site":"","date":"YYYY-MM-DD","type":"normal","items":[{"name":"","qty":1,"price":0,"tb":"","bg":"","desc":""}]}`;
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45-second timeout for base64 OCR
+    const timeoutId = setTimeout(() => controller.abort(), 35000); // 35-second timeout for base64 OCR
 
     try {
         const res = await fetch(GEMINI_API_URL, {
@@ -2371,7 +2372,8 @@ JSON schema:
                 generationConfig: {
                     responseMimeType: 'application/json',
                     temperature: 0,
-                    maxOutputTokens: 1024
+                    maxOutputTokens: 600,
+                    thinkingConfig: { thinkingBudget: 0 }
                 }
             })
         });
@@ -2392,7 +2394,7 @@ JSON schema:
     } catch (err) {
         clearTimeout(timeoutId);
         if (err.name === 'AbortError') {
-            throw new Error('Respon Gemini AI terlalu lama (timeout 45 detik). Coba upload lagi.');
+            throw new Error('Respon Gemini AI terlalu lama (timeout 35 detik). Coba upload lagi.');
         }
         throw err;
     }
