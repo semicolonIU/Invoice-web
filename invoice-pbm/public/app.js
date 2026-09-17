@@ -51,20 +51,18 @@ window.togglePrivacyMode = function() {
 };
 
 window.updatePrivacyUI = function() {
-    ['privacy-toggle-btn', 'privacy-toggle-btn-mobile'].forEach(btnId => {
-        const btn = document.getElementById(btnId);
-        if (!btn) return;
-        const icon = btn.querySelector('i');
-        if (isPrivacyMode) {
-            if (icon) icon.className = 'fa-solid fa-eye-slash';
-            btn.title = 'Sensor Uang: AKTIF (Klik untuk nonaktifkan)';
-            btn.classList.add('privacy-active');
-        } else {
-            if (icon) icon.className = 'fa-solid fa-eye';
-            btn.title = 'Sensor Uang: NONAKTIF (Klik untuk aktifkan)';
-            btn.classList.remove('privacy-active');
-        }
-    });
+    const btn = document.getElementById('privacy-toggle-btn');
+    if (!btn) return;
+    const icon = btn.querySelector('i');
+    if (isPrivacyMode) {
+        if (icon) icon.className = 'fa-solid fa-eye-slash';
+        btn.title = 'Sensor Uang: AKTIF (Klik untuk nonaktifkan)';
+        btn.classList.add('privacy-active');
+    } else {
+        if (icon) icon.className = 'fa-solid fa-eye';
+        btn.title = 'Sensor Uang: NONAKTIF (Klik untuk aktifkan)';
+        btn.classList.remove('privacy-active');
+    }
 };
 
 // ══════════════════════════════════════════════════════
@@ -904,67 +902,60 @@ function checkRentalNotifications(docs) {
 function renderNotifications() {
     const active = notifications.filter(n => !n.dismissed);
 
-    // Update badges
-    ['notif-badge', 'notif-badge-mobile'].forEach(id => {
-        const badge = document.getElementById(id);
-        if (badge) {
-            if (active.length > 0) {
-                badge.style.display = 'flex';
-                badge.textContent = active.length > 99 ? '99+' : active.length;
-            } else {
-                badge.style.display = 'none';
-            }
+    // Update badge
+    const badge = document.getElementById('notif-badge');
+    if (badge) {
+        if (active.length > 0) {
+            badge.style.display = 'flex';
+            badge.textContent = active.length > 99 ? '99+' : active.length;
+        } else {
+            badge.style.display = 'none';
         }
-    });
+    }
 
-    // Update bell buttons
-    ['notif-bell-btn', 'notif-bell-btn-mobile'].forEach(id => {
-        const btn = document.getElementById(id);
-        if (btn) {
-            if (active.length > 0) btn.classList.add('has-notif');
-            else btn.classList.remove('has-notif');
-        }
-    });
+    // Update bell button
+    const bellBtn = document.getElementById('notif-bell-btn');
+    if (bellBtn) {
+        if (active.length > 0) bellBtn.classList.add('has-notif');
+        else bellBtn.classList.remove('has-notif');
+    }
 
-    // Render list into all containers
-    ['notif-list', 'notif-list-mobile'].forEach(listId => {
-        const listEl = document.getElementById(listId);
-        if (!listEl) return;
+    // Render notification list
+    const listEl = document.getElementById('notif-list');
+    if (!listEl) return;
 
-        if (notifications.length === 0) {
-            listEl.innerHTML = '<div class="notif-empty"><i class="fa-solid fa-inbox"></i><br>Tidak ada notifikasi</div>';
-            return;
-        }
+    if (notifications.length === 0) {
+        listEl.innerHTML = '<div class="notif-empty"><i class="fa-solid fa-inbox"></i><br>Tidak ada notifikasi</div>';
+        return;
+    }
 
-        listEl.innerHTML = '';
-        notifications.forEach(n => {
-            const item = document.createElement('div');
-            item.className = `notif-item ${n.level} ${n.dismissed ? 'dismissed' : ''}`;
-            item.style.opacity = n.dismissed ? '0.45' : '1';
-            item.innerHTML = `
-                <div class="notif-item-icon"><i class="fa-solid ${n.icon}"></i></div>
-                <div class="notif-item-body">
-                    <div class="notif-item-title">${n.noInvoice} – ${n.clientName || '-'}</div>
-                    <div class="notif-item-desc">Sewa berakhir: ${n.endDate}</div>
-                    <div class="notif-item-time">${n.label}</div>
-                </div>
-                <button class="notif-dismiss-btn" title="${n.dismissed ? 'Sudah dibaca' : 'Tandai sudah dibaca'}">
-                    <i class="fa-solid ${n.dismissed ? 'fa-check-circle' : 'fa-check'}"></i>
-                </button>
-            `;
-            const dismissBtn = item.querySelector('.notif-dismiss-btn');
-            dismissBtn.onclick = (e) => {
-                e.stopPropagation();
-                dismissNotification(n.id);
-            };
-            item.onclick = (e) => {
-                if (e.target.closest('.notif-dismiss-btn')) return;
-                openRentalForm(n);
-                toggleNotifPanel(false);
-                toggleNotifPanelMobile(false);
-            };
-            listEl.appendChild(item);
-        });
+    listEl.innerHTML = '';
+    notifications.forEach(n => {
+        const item = document.createElement('div');
+        item.className = `notif-item ${n.level} ${n.dismissed ? 'dismissed' : ''}`;
+        item.style.opacity = n.dismissed ? '0.45' : '1';
+        item.innerHTML = `
+            <div class="notif-item-icon"><i class="fa-solid ${n.icon}"></i></div>
+            <div class="notif-item-body">
+                <div class="notif-item-title">${n.noInvoice} – ${n.clientName || '-'}</div>
+                <div class="notif-item-desc">Sewa berakhir: ${n.endDate}</div>
+                <div class="notif-item-time">${n.label}</div>
+            </div>
+            <button class="notif-dismiss-btn" title="${n.dismissed ? 'Sudah dibaca' : 'Tandai sudah dibaca'}">
+                <i class="fa-solid ${n.dismissed ? 'fa-check-circle' : 'fa-check'}"></i>
+            </button>
+        `;
+        const dismissBtn = item.querySelector('.notif-dismiss-btn');
+        dismissBtn.onclick = (e) => {
+            e.stopPropagation();
+            dismissNotification(n.id);
+        };
+        item.onclick = (e) => {
+            if (e.target.closest('.notif-dismiss-btn')) return;
+            openRentalForm(n);
+            toggleNotifPanel(false);
+        };
+        listEl.appendChild(item);
     });
 }
 
