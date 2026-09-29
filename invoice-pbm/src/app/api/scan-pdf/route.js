@@ -46,22 +46,31 @@ JSON schema:
 {"clientName":"","clientAddress":"","noPo":"","site":"","date":"YYYY-MM-DD","type":"normal","items":[{"name":"","qty":1,"price":0,"tb":"","bg":"","desc":""}]}`;
 
     // ── 3. Call Gemini AI Multimodal ─────────────────────────────────────
-    const apiKey = process.env.GOOGLE_API_KEY || 'AIzaSyDIwa7qO-bASLVwOYoub-XJXQEm4AeCPgE';
+    const apiKey = process.env.GOOGLE_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: 'Konfigurasi server tidak lengkap: GOOGLE_API_KEY tidak ditemukan.' },
+        { status: 500, headers: CORS_HEADERS }
+      );
+    }
+    console.log(`[Scan PDF] Menggunakan API Key awalan: ${apiKey.substring(0, 8)}...`);
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      generationConfig: {
-        responseMimeType: 'application/json',
-        temperature: 0,
-        maxOutputTokens: 600,
-        thinkingConfig: { thinkingBudget: 0 },
-      },
-    });
+    const candidateModels = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-3.5-flash'];
 
     let result;
     let lastErr;
-    for (let attempt = 1; attempt <= 3; attempt++) {
+
+    for (const modelName of candidateModels) {
       try {
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: {
+            responseMimeType: 'application/json',
+            temperature: 0,
+            maxOutputTokens: 4096,
+          },
+        });
+
         result = await model.generateContent([
           {
             inlineData: {
@@ -71,17 +80,13 @@ JSON schema:
           },
           prompt,
         ]);
+        
         lastErr = null;
+        console.log(`[Scan PDF] Berhasil menggunakan model: ${modelName}`);
         break;
       } catch (err) {
         lastErr = err;
-        const status = err?.status;
-        console.error(`Attempt ${attempt}/3 failed [${status}]: ${err?.message || err}`);
-
-        if (attempt < 3) {
-          const wait = status === 429 ? 1000 : 500;
-          await new Promise(r => setTimeout(r, wait));
-        }
+        console.error(`[Scan PDF] Gagal dengan model ${modelName}:`, err?.message || err);
       }
     }
 
@@ -97,10 +102,16 @@ JSON schema:
     }
 
     // ── 4. Parse response ─────────────────────────────────────────────────
-    const responseText = result.response.text()
+    let responseText = result.response.text()
       .replace(/```json/gi, '')
       .replace(/```/g, '')
       .trim();
+
+    const firstBrace = responseText.indexOf('{');
+    const lastBrace = responseText.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1) {
+      responseText = responseText.substring(firstBrace, lastBrace + 1);
+    }
 
     let extractedData;
     try {

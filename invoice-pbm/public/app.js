@@ -2238,170 +2238,33 @@ window.generateInvNumber = function(prefix) {
     document.getElementById('inv-number').value = `${prefixStr}${yStr}${mStr}${rand4}`;
 };
 
-// ── Gemini API config (client-side, Gemini 2.5 Flash with Zero Thinking Tokens for Maximum Speed) ──
-const GEMINI_API_KEY = 'AIzaSyDIwa7qO-bASLVwOYoub-XJXQEm4AeCPgE';
-const GEMINI_MODEL   = 'gemini-2.5-flash';
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
-
-// Pure JS instant text extraction from PDF stream (0.1ms, zero worker overhead)
-function extractPdfTextPureJs(arrayBuffer) {
-    try {
-        const bytes = new Uint8Array(arrayBuffer);
-        let str = '';
-        const len = bytes.length;
-        // Limit string scanning to first 500KB for speed
-        const scanLen = Math.min(len, 500000);
-        for (let i = 0; i < scanLen; i++) {
-            str += String.fromCharCode(bytes[i]);
-        }
-        const textMatches = [];
-        const tjRegex = /\(([^)]+)\)\s*Tj/g;
-        let match;
-        while ((match = tjRegex.exec(str)) !== null) {
-            if (match[1] && match[1].trim().length > 0) {
-                textMatches.push(match[1]);
-            }
-        }
-        const arrayTjRegex = /\[\s*((?:\((?:[^)]+)\)\s*)*)\]\s*TJ/g;
-        while ((match = arrayTjRegex.exec(str)) !== null) {
-            const inner = match[1];
-            const innerRegex = /\(([^)]+)\)/g;
-            let innerMatch;
-            let combined = '';
-            while ((innerMatch = innerRegex.exec(inner)) !== null) {
-                combined += innerMatch[1];
-            }
-            if (combined.trim().length > 0) {
-                textMatches.push(combined);
-            }
-        }
-        return textMatches.join(' ').replace(/\s+/g, ' ').trim();
-    } catch (e) {
-        console.warn('Pure JS PDF text extraction failed:', e);
-        return '';
-    }
-}
-
-// Ultra-fast Gemini AI call using extracted text (1-2s total response time)
-async function callGeminiText(pdfText) {
-    const prompt = `You are an expert invoice data extractor. Read the invoice text below and return ONLY a valid JSON object — no markdown formatting, no explanation.
-
-Rules:
-- clientName: the client/buyer company name. NEVER use "PUTRA BANUA MANDIRI" (that is the vendor/seller).
-- clientAddress: use address labelled "ALAMAT PENGIRIMAN BARANG" or buyer address if present.
-- price: integer (strip Rp and dots/commas, e.g. 5000000).
-- tb: Tugboat name (e.g. TB KSA-01). bg: Barge name (e.g. BG 3001). desc: extra description.
-- type: "rental" if sewa/rental is mentioned in invoice title or items, else "normal".
-- items: array of objects, one per line item — do NOT merge multiple items into one.
-
-JSON schema:
-{"clientName":"","clientAddress":"","noPo":"","site":"","date":"YYYY-MM-DD","type":"normal","items":[{"name":"","qty":1,"price":0,"tb":"","bg":"","desc":""}]}
-
-INVOICE TEXT:
-${pdfText.slice(0, 4000)}`;
+// ── Scan PDF via Backend API Route (Secure Server-Side Gemini AI Call) ──
+async function scanPdfViaServer(file) {
+    const formData = new FormData();
+    formData.append('file', file);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20-second timeout for text
+    const timeoutId = setTimeout(() => controller.abort(), 35000);
 
     try {
-        const res = await fetch(GEMINI_API_URL, {
+        const res = await fetch('/api/scan-pdf', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            signal: controller.signal,
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: {
-                    responseMimeType: 'application/json',
-                    temperature: 0,
-                    maxOutputTokens: 600,
-                    thinkingConfig: { thinkingBudget: 0 }
-                }
-            })
+            body: formData,
+            signal: controller.signal
         });
 
         clearTimeout(timeoutId);
 
-        if (!res.ok) {
-            const errBody = await res.json().catch(() => ({}));
-            const msg = errBody?.error?.message || res.statusText;
-            if (res.status === 429) throw new Error('Rate limit Gemini AI. Tunggu beberapa detik lalu coba lagi.');
-            throw new Error(`Gemini AI error (${res.status}): ${msg}`);
+        const result = await res.json().catch(() => ({}));
+        if (!res.ok || !result.success) {
+            throw new Error(result.error || `Error server (${res.status})`);
         }
 
-        const json = await res.json();
-        let text = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        text = text.replace(/```json/gi, '').replace(/```/g, '').trim();
-        return JSON.parse(text);
+        return result.data;
     } catch (err) {
         clearTimeout(timeoutId);
         if (err.name === 'AbortError') {
-            throw new Error('Respon Gemini AI terlalu lama (timeout 20 detik). Coba upload lagi.');
-        }
-        throw err;
-    }
-}
-
-// Fallback: Gemini Multimodal PDF Base64 call (for image/scanned PDFs)
-async function callGeminiPdfBase64(base64Data) {
-    const prompt = `You are an expert invoice data extractor. Read the attached PDF invoice document (both text and visual layout) and extract the invoice fields into ONLY a valid JSON object — no markdown formatting, no explanation.
-
-Rules:
-- clientName: the client/buyer company name. NEVER use "PUTRA BANUA MANDIRI" (that is the vendor/seller).
-- clientAddress: use address labelled "ALAMAT PENGIRIMAN BARANG" or buyer address if present.
-- price: integer (strip Rp and dots/commas, e.g. 5000000).
-- tb: Tugboat name (e.g. TB KSA-01). bg: Barge name (e.g. BG 3001). desc: extra description.
-- type: "rental" if sewa/rental is mentioned in invoice title or items, else "normal".
-- items: array of objects, one per line item — do NOT merge multiple items into one.
-
-JSON schema:
-{"clientName":"","clientAddress":"","noPo":"","site":"","date":"YYYY-MM-DD","type":"normal","items":[{"name":"","qty":1,"price":0,"tb":"","bg":"","desc":""}]}`;
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 35000); // 35-second timeout for base64 OCR
-
-    try {
-        const res = await fetch(GEMINI_API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            signal: controller.signal,
-            body: JSON.stringify({
-                contents: [{
-                    parts: [
-                        {
-                            inlineData: {
-                                mimeType: "application/pdf",
-                                data: base64Data
-                            }
-                        },
-                        { text: prompt }
-                    ]
-                }],
-                generationConfig: {
-                    responseMimeType: 'application/json',
-                    temperature: 0,
-                    maxOutputTokens: 600,
-                    thinkingConfig: { thinkingBudget: 0 }
-                }
-            })
-        });
-
-        clearTimeout(timeoutId);
-
-        if (!res.ok) {
-            const errBody = await res.json().catch(() => ({}));
-            const msg = errBody?.error?.message || res.statusText;
-            if (res.status === 429) throw new Error('Rate limit Gemini AI. Tunggu beberapa detik lalu coba lagi.');
-            throw new Error(`Gemini AI error (${res.status}): ${msg}`);
-        }
-
-        const json = await res.json();
-        let text = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        text = text.replace(/```json/gi, '').replace(/```/g, '').trim();
-        return JSON.parse(text);
-    } catch (err) {
-        clearTimeout(timeoutId);
-        if (err.name === 'AbortError') {
-            throw new Error('Respon Gemini AI terlalu lama (timeout 35 detik). Coba upload lagi.');
+            throw new Error('Respon server terlalu lama (timeout 35 detik). Coba upload lagi.');
         }
         throw err;
     }
@@ -2445,31 +2308,9 @@ window.handlePdfScan = async function(input) {
     }, 3000);
 
     try {
-        const arrayBuffer = await file.arrayBuffer();
-        const extractedText = extractPdfTextPureJs(arrayBuffer);
-        let data;
-
-        if (extractedText && extractedText.length > 25) {
-            console.log(`[Scan PDF] Fast Text Extraction success (${extractedText.length} chars). Sending text to Gemini AI...`);
-            if (subText) subText.textContent = 'Menghubungkan ke Gemini AI (Mode Teks Cepat)...';
-            data = await callGeminiText(extractedText);
-        } else {
-            console.log('[Scan PDF] Scanned/Image PDF detected or text empty. Falling back to Gemini Multimodal OCR...');
-            if (subText) subText.textContent = 'Menganalisis dokumen PDF dengan Gemini AI OCR...';
-            
-            const base64Data = await new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => {
-                    const res = reader.result;
-                    const base64 = typeof res === 'string' && res.includes(',') ? res.split(',')[1] : res;
-                    resolve(base64);
-                };
-                reader.onerror = () => reject(new Error('Gagal membaca file PDF lokal.'));
-                reader.readAsDataURL(file);
-            });
-
-            data = await callGeminiPdfBase64(base64Data);
-        }
+        console.log('[Scan PDF] Sending PDF to backend API server for Gemini AI extraction...');
+        if (subText) subText.textContent = 'Menganalisis dokumen PDF dengan Gemini AI...';
+        const data = await scanPdfViaServer(file);
 
         // Populate form fields with safe null checks
         if (data.type) { showCreate(data.type); highlightField('form-title'); }
