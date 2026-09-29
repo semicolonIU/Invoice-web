@@ -17,6 +17,7 @@ let currentSortBy = '$createdAt';
 let currentSortDir = 'desc';
 let currentTypeFilter = 'all';
 let isPrivacyMode = localStorage.getItem('pbm_privacy_mode') === 'true';
+let selectedInvoiceIds = new Set();
 
 window.formatRupiah = function(amount, prefix = 'Rp ') {
     if (isPrivacyMode) {
@@ -1437,8 +1438,13 @@ function renderInvoiceTable(docs) {
     tbody.innerHTML = '';
     items.forEach(({ invoice, isRental, itemKeterangan }) => {
         const createdDateStr = invoice.$createdAt ? new Date(invoice.$createdAt).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
+        const isChecked = selectedInvoiceIds.has(invoice.$id);
         const tr = document.createElement('tr');
+        if (isChecked) tr.classList.add('selected-row');
         tr.innerHTML = `
+            <td style="text-align: center;">
+                <input type="checkbox" class="invoice-checkbox" value="${invoice.$id}" ${isChecked ? 'checked' : ''} onchange="toggleSelectInvoice('${invoice.$id}', this.checked)" style="cursor: pointer; width: 16px; height: 16px;">
+            </td>
             <td>
                 <strong>${invoice.NoInvoice}</strong>
                 <br><span class="badge ${isRental ? 'badge-sewa' : 'badge-reguler'}">${isRental ? 'Sewa' : 'Reguler'}</span>
@@ -1467,6 +1473,7 @@ function renderInvoiceTable(docs) {
         `;
         tbody.appendChild(tr);
     });
+    if (typeof updateBatchActionBar === 'function') updateBatchActionBar();
 }
 
 function updateStats(docs) {
@@ -1979,6 +1986,137 @@ window.nativeShare = async function(id) {
         }
     }
 }
+
+// ══════════════════════════════════════════════════════
+//  MULTI-SELECT BATCH SHARE & DOWNLOAD PDF
+// ══════════════════════════════════════════════════════
+
+window.toggleSelectInvoice = function(id, isChecked) {
+    if (isChecked) {
+        selectedInvoiceIds.add(id);
+    } else {
+        selectedInvoiceIds.delete(id);
+    }
+    const cb = document.querySelector(`.invoice-checkbox[value="${id}"]`);
+    if (cb) {
+        const row = cb.closest('tr');
+        if (row) row.classList.toggle('selected-row', isChecked);
+    }
+    updateBatchActionBar();
+};
+
+window.toggleSelectAllInvoices = function(isChecked) {
+    const checkboxes = document.querySelectorAll('.invoice-checkbox');
+    checkboxes.forEach(cb => {
+        cb.checked = isChecked;
+        const row = cb.closest('tr');
+        if (isChecked) {
+            selectedInvoiceIds.add(cb.value);
+            if (row) row.classList.add('selected-row');
+        } else {
+            selectedInvoiceIds.delete(cb.value);
+            if (row) row.classList.remove('selected-row');
+        }
+    });
+    updateBatchActionBar();
+};
+
+window.clearSelectedInvoices = function() {
+    selectedInvoiceIds.clear();
+    const selectAllCb = document.getElementById('select-all-invoices');
+    if (selectAllCb) selectAllCb.checked = false;
+    document.querySelectorAll('.invoice-checkbox').forEach(cb => {
+        cb.checked = false;
+        const row = cb.closest('tr');
+        if (row) row.classList.remove('selected-row');
+    });
+    updateBatchActionBar();
+};
+
+window.updateBatchActionBar = function() {
+    const bar = document.getElementById('batch-action-bar');
+    const textEl = document.getElementById('batch-count-text');
+    const count = selectedInvoiceIds.size;
+
+    if (bar) bar.style.display = count > 0 ? 'flex' : 'none';
+    if (textEl) textEl.textContent = `${count} invoice dipilih`;
+
+    const selectAllCb = document.getElementById('select-all-invoices');
+    const currentCheckboxes = document.querySelectorAll('.invoice-checkbox');
+    if (selectAllCb && currentCheckboxes.length > 0) {
+        selectAllCb.checked = Array.from(currentCheckboxes).every(cb => cb.checked);
+    }
+};
+
+window.shareBatchPDF = async function() {
+    const selectedIds = Array.from(selectedInvoiceIds);
+    if (selectedIds.length === 0) {
+        notify('Pilih minimal 1 invoice untuk dibagikan.', 'warning');
+        return;
+    }
+
+    const allData = [...currentInvoices, ...statsData, ...(searchFilteredData || [])];
+    const selectedDocs = selectedIds.map(id => allData.find(inv => inv.$id === id)).filter(Boolean);
+
+    if (selectedDocs.length === 0) {
+        notify('Data invoice tidak ditemukan.', 'warning');
+        return;
+    }
+
+    notify(`Menyiapkan ${selectedDocs.length} file PDF...`, 'info', 6000);
+
+    try {
+        const files = [];
+        for (const doc of selectedDocs) {
+            const { blob, title } = await window.generatePDF(doc, 'share');
+            files.push(new File([blob], title, { type: 'application/pdf' }));
+        }
+
+        if (navigator.canShare && navigator.canShare({ files })) {
+            await navigator.share({
+                files,
+                title: `${files.length} Dokumen Invoice PBM`,
+                text: `Berikut terlampir ${files.length} dokumen tagihan (Invoice).`
+            });
+            ActivityLog.add('share_pdf', `Bagikan ${files.length} PDF sekaligus`, `Invoice: ${selectedDocs.map(d => d.NoInvoice).join(', ')}`);
+            notify(`${files.length} PDF berhasil dibagikan!`, 'success');
+        } else {
+            notify('Browser tidak mendukung berbagi banyak file sekaligus. Mengunduh satu per satu...', 'warning');
+            await window.downloadBatchPDF();
+        }
+    } catch (e) {
+        if (e.name !== 'AbortError') {
+            notify('Gagal membagikan PDF: ' + e.message, 'error');
+        }
+    }
+};
+
+window.downloadBatchPDF = async function() {
+    const selectedIds = Array.from(selectedInvoiceIds);
+    if (selectedIds.length === 0) {
+        notify('Pilih minimal 1 invoice untuk diunduh.', 'warning');
+        return;
+    }
+
+    const allData = [...currentInvoices, ...statsData, ...(searchFilteredData || [])];
+    const selectedDocs = selectedIds.map(id => allData.find(inv => inv.$id === id)).filter(Boolean);
+
+    if (selectedDocs.length === 0) return;
+
+    notify(`Mengunduh ${selectedDocs.length} file PDF...`, 'info', 5000);
+
+    for (const doc of selectedDocs) {
+        try {
+            await window.generatePDF(doc, 'download');
+            ActivityLog.add('download_pdf', `PDF diunduh: ${doc.NoInvoice}`, `Klien: ${Array.isArray(doc.clientName) ? doc.clientName[0] : doc.clientName}`);
+            await new Promise(r => setTimeout(r, 400)); // Jeda singkat antar unduhan
+        } catch (e) {
+            console.error(`Gagal download PDF ${doc.NoInvoice}:`, e);
+        }
+    }
+
+    notify(`Selesai mengunduh ${selectedDocs.length} PDF!`, 'success');
+};
 
 // Deteksi perangkat mobile (Android / iOS)
 function isMobileDevice() {

@@ -2247,3 +2247,51 @@ th.sortable.active-sort .sort-icon {
     }
 }
 
+/* ══════════════════════════════════════════════════════
+   FLOATING BATCH ACTIONS BAR
+   ══════════════════════════════════════════════════════ */
+.batch-action-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 20px;
+    background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+    color: #ffffff;
+    border-radius: 14px;
+    box-shadow: 0 12px 35px rgba(49, 46, 129, 0.45);
+    margin-bottom: 16px;
+    animation: batchSlideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    flex-wrap: wrap;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+@keyframes batchSlideDown {
+    from { opacity: 0; transform: translateY(-12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.batch-action-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.batch-action-info i {
+    font-size: 18px;
+    color: #818cf8;
+}
+
+.batch-action-btns {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.selected-row {
+    background-color: rgba(99, 102, 241, 0.08) !important;
+}
+

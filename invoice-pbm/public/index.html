@@ -205,12 +205,32 @@
                     <button class="filter-pill active" data-type="all" onclick="setFilterType('all')">Semua Invoice</button>
                     <button class="filter-pill" data-type="normal" onclick="setFilterType('normal')">Reguler</button>
                     <button class="filter-pill" data-type="rental" onclick="setFilterType('rental')">Sewa</button>
+                <!-- Floating Bulk Actions Bar -->
+                <div id="batch-action-bar" class="batch-action-bar" style="display: none;">
+                    <div class="batch-action-info">
+                        <i class="fa-solid fa-square-check"></i>
+                        <span id="batch-count-text">0 invoice dipilih</span>
+                    </div>
+                    <div class="batch-action-btns">
+                        <button class="btn btn-primary btn-sm" onclick="shareBatchPDF()">
+                            <i class="fa-solid fa-share-nodes"></i> Bagikan Terpilih (PDF)
+                        </button>
+                        <button class="btn btn-secondary btn-sm" onclick="downloadBatchPDF()">
+                            <i class="fa-solid fa-download"></i> Unduh Terpilih (PDF)
+                        </button>
+                        <button class="btn btn-outline btn-sm" onclick="clearSelectedInvoices()" style="color:#fff; border-color:rgba(255,255,255,0.4);">
+                            <i class="fa-solid fa-xmark"></i> Batal
+                        </button>
+                    </div>
                 </div>
 
                 <div class="table-container">
                     <table id="invoice-table">
                         <thead>
                             <tr>
+                                <th style="width: 38px; text-align: center;">
+                                    <input type="checkbox" id="select-all-invoices" onchange="toggleSelectAllInvoices(this.checked)" title="Pilih Semua di Halaman Ini" style="cursor: pointer; width: 16px; height: 16px;">
+                                </th>
                                 <th class="sortable" onclick="handleSort('NoInvoice')">No. Invoice <i class="fa-solid fa-sort sort-icon" id="sort-icon-NoInvoice"></i></th>
                                 <th class="sortable" onclick="handleSort('clientName')">Klien <i class="fa-solid fa-sort sort-icon" id="sort-icon-clientName"></i></th>
                                 <th>Keterangan Item</th>
@@ -222,7 +242,7 @@
                             </tr>
                         </thead>
                         <tbody id="invoice-list">
-                            <tr><td colspan="8" class="text-center loading-text">Memuat data...</td></tr>
+                            <tr><td colspan="9" class="text-center loading-text">Memuat data...</td></tr>
                         </tbody>
                     </table>
                 </div>
