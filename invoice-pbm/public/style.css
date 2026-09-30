@@ -450,8 +450,9 @@ textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79, 70
     .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     table { min-width: 100%; border-radius: 8px; }
     
-    /* Hide Keterangan Item (3rd column) on mobile to save space, but KEEP Status (6th) visible! */
-    th:nth-child(3), td:nth-child(3) { 
+    /* Hide Keterangan Item & Dibuat Pada on mobile to save space, but KEEP Klien & Status visible! */
+    #invoice-table th.col-item-desc, #invoice-table td.col-item-desc,
+    #invoice-table th.col-created-at, #invoice-table td.col-created-at { 
         display: none; 
     }
     
@@ -1636,6 +1637,14 @@ th.sortable.active-sort .sort-icon {
     #invoice-table td {
         padding: 8px 6px !important;
         font-size: 11px !important;
+    }
+    #invoice-table .col-client {
+        font-size: 11px !important;
+        font-weight: 600 !important;
+        color: var(--text-main);
+        max-width: 140px;
+        word-break: break-word;
+        white-space: normal;
     }
     #invoice-table .badge {
         font-size: 9px !important;

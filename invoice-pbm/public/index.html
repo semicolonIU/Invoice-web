@@ -232,10 +232,10 @@
                                     <input type="checkbox" id="select-all-invoices" onchange="toggleSelectAllInvoices(this.checked)" title="Pilih Semua di Halaman Ini" style="cursor: pointer; width: 16px; height: 16px;">
                                 </th>
                                 <th class="sortable" onclick="handleSort('NoInvoice')">No. Invoice <i class="fa-solid fa-sort sort-icon" id="sort-icon-NoInvoice"></i></th>
-                                <th class="sortable" onclick="handleSort('clientName')">Klien <i class="fa-solid fa-sort sort-icon" id="sort-icon-clientName"></i></th>
-                                <th>Keterangan Item</th>
+                                <th class="sortable col-client" onclick="handleSort('clientName')">Klien <i class="fa-solid fa-sort sort-icon" id="sort-icon-clientName"></i></th>
+                                <th class="col-item-desc">Keterangan Item</th>
                                 <th class="sortable" onclick="handleSort('date')" style="line-height: 1.25; vertical-align: middle;">Tanggal<br>Invoice <i class="fa-solid fa-sort sort-icon" id="sort-icon-date"></i></th>
-                                <th class="sortable active-sort" onclick="handleSort('$createdAt')">Dibuat Pada <i class="fa-solid fa-sort-down sort-icon" id="sort-icon-$createdAt"></i></th>
+                                <th class="sortable active-sort col-created-at" onclick="handleSort('$createdAt')">Dibuat Pada <i class="fa-solid fa-sort-down sort-icon" id="sort-icon-$createdAt"></i></th>
                                 <th class="sortable" onclick="handleSort('totalAmount')">Total (Rp) <i class="fa-solid fa-sort sort-icon" id="sort-icon-totalAmount"></i></th>
                                 <th>Status</th>
                                 <th>Aksi</th>
