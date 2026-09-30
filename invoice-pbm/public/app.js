@@ -1614,12 +1614,13 @@ document.getElementById('invoice-form').addEventListener('submit', async (e) => 
 
         // Ambil snapshot data lama sebelum update (untuk restore)
         let prevSnapshot = '';
+        let savedDoc;
         if (editingId) {
             const prev = currentInvoices.find(v => v.$id === editingId) || statsData.find(v => v.$id === editingId);
             if (prev) prevSnapshot = ActivityLog.makeSnapshot(prev);
-            await API.updateInvoice(editingId, invoiceData);
+            savedDoc = await API.updateInvoice(editingId, invoiceData);
         } else {
-            await API.createInvoice(invoiceData);
+            savedDoc = await API.createInvoice(invoiceData);
         }
 
         // Fitur Google Calendar via Webhook Make.com (Otomatis di Background)
@@ -1630,7 +1631,7 @@ document.getElementById('invoice-form').addEventListener('submit', async (e) => 
                 
                 // --- PENTING: GANTI URL DI BAWAH INI DENGAN WEBHOOK MAKE.COM ANDA ---
                 const MAKE_WEBHOOK_URL = 'https://hook.eu1.make.com/7hi6l7tvede93y853hslvlax68omzcjk';
-                const invoiceDocId = invoiceData.$id || '';
+                const invoiceDocId = (savedDoc && savedDoc.$id) ? savedDoc.$id : (invoiceData.$id || '');
                 const newRentalUrl = `${window.location.origin}/?rental_from=${invoiceDocId}`;
                 
                 // Hanya kirim jika URL sudah diisi oleh pengguna
@@ -1800,9 +1801,15 @@ window.editInvoice = function(id) {
     calculateTotal();
 }
 
-window.createRentalForThisMonth = function(id) {
-    const invoice = currentInvoices.find(v => v.$id === id);
-    if (!invoice) return;
+window.createRentalForThisMonth = async function(id) {
+    let invoice = currentInvoices.find(v => v.$id === id) || statsData.find(v => v.$id === id);
+    if (!invoice) {
+        try { invoice = await API.getInvoice(id); } catch(e) {}
+    }
+    if (!invoice) {
+        if (typeof notify === 'function') notify('Data invoice sumber tidak ditemukan.', 'error');
+        return;
+    }
 
     let savedNotes = '';
     let itemsArray = [];
