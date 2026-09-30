@@ -1007,7 +1007,7 @@ function openRentalForm(notif) {
                 savedNotes = noteObj.notes || '';
                 descArr    = noteObj.desc  || [];
                 flags      = noteObj.flags || flags;
-                itemsArray = Array.isArray(itemObj) ? itemObj : [];
+                itemsArray = (itemObj && itemObj.itemList) ? itemObj.itemList : (Array.isArray(itemObj) ? itemObj : []);
             } else {
                 savedNotes = itemObj?.notes || '';
                 flags      = itemObj?.flags || flags;
@@ -1822,7 +1822,7 @@ window.createRentalForThisMonth = async function(id) {
         if (noteObj) {
             savedNotes = noteObj.notes || '';
             descArr = noteObj.desc || [];
-            itemsArray = Array.isArray(itemObj) ? itemObj : [];
+            itemsArray = (itemObj && itemObj.itemList) ? itemObj.itemList : (Array.isArray(itemObj) ? itemObj : []);
         } else {
             savedNotes = itemObj?.notes || '';
             if (itemObj && itemObj.itemList) {
