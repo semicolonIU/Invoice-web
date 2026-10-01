@@ -1451,9 +1451,9 @@ function renderInvoiceTable(docs) {
             </td>
             <td class="col-client" style="font-weight:600;">${Array.isArray(invoice.clientName) ? invoice.clientName[0] : invoice.clientName}</td>
             <td class="col-item-desc" style="font-size:0.85em;">${itemKeterangan}</td>
-            <td>${new Date(invoice.date).toLocaleDateString('id-ID')}</td>
+            <td data-label="Tgl. Inv">${new Date(invoice.date).toLocaleDateString('id-ID')}</td>
             <td class="col-created-at" style="font-size:0.85em; color:var(--text-muted);">${createdDateStr}</td>
-            <td style="font-weight:600; color:var(--text-main)">${formatRupiah(invoice.totalAmount)}</td>
+            <td data-label="Total" style="font-weight:600; color:var(--text-main)">${formatRupiah(invoice.totalAmount)}</td>
             <td>
                 <select class="status-select status-${invoice.paymentStatus || 'pending'}" onchange="updatePaymentStatus('${invoice.$id}', this.value); this.className='status-select status-'+this.value;">
                     <option value="pending" ${invoice.paymentStatus === 'pending' ? 'selected' : ''}>Belum Lunas</option>

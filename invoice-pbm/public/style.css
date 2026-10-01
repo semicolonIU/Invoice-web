@@ -447,18 +447,19 @@ textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79, 70
         align-items: center; 
     }
     
+    /* On tablets (768px), just scroll horizontally */
     .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     table { min-width: 100%; border-radius: 8px; }
-    
-    /* Hide Keterangan Item & Dibuat Pada on mobile to save space, but KEEP Klien & Status visible! */
+
+    /* Hide Keterangan Item & Dibuat Pada on mobile */
     #invoice-table th.col-item-desc, #invoice-table td.col-item-desc,
-    #invoice-table th.col-created-at, #invoice-table td.col-created-at { 
-        display: none; 
+    #invoice-table th.col-created-at, #invoice-table td.col-created-at {
+        display: none;
     }
-    
+
     /* Enhanced Action Buttons on Mobile */
-    .action-cell { 
-        padding: 5px !important; 
+    .action-cell {
+        padding: 5px !important;
         vertical-align: middle;
     }
     .action-wrapper {
@@ -467,20 +468,193 @@ textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79, 70
         justify-content: flex-end;
         gap: 4px;
     }
-    .btn-action { 
-        padding: 8px 10px !important; 
-        font-size: 14px !important; 
+    .btn-action {
+        padding: 8px 10px !important;
+        font-size: 14px !important;
         min-width: 38px;
         height: 38px;
         justify-content: center;
     }
-    .btn-action span { display: none; } /* Hide text labels to save space */
-    
+    .btn-action span { display: none; }
+
     .form-actions { flex-direction: column-reverse; }
     .form-container { padding: 20px; }
-    
     .total-section { text-align: center; padding-right: 0; }
 }
+
+/* ═══════════════════════════════════════════════════════
+   MOBILE CARD TABLE (<=640px)
+   Each invoice row becomes a standalone card
+   ═══════════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+    /* Unwrap the table-container overflow */
+    .table-container { overflow-x: visible; }
+
+    /* Hide the traditional table header */
+    #invoice-table thead { display: none; }
+
+    /* Block-level table & tbody */
+    #invoice-table,
+    #invoice-table tbody { display: block; width: 100%; }
+
+    /* Each row = a card */
+    #invoice-table tbody tr {
+        display: block;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        margin-bottom: 12px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+        transition: box-shadow 0.2s, border-color 0.2s;
+    }
+    #invoice-table tbody tr:hover {
+        box-shadow: 0 4px 18px rgba(99, 102, 241, 0.14);
+        border-color: rgba(99, 102, 241, 0.35);
+    }
+    #invoice-table tbody tr.selected-row {
+        border-color: rgba(99, 102, 241, 0.55) !important;
+        background: rgba(99, 102, 241, 0.05) !important;
+    }
+    #invoice-table tbody tr:last-child td { border-bottom: none; }
+
+    /* All cells become rows inside the card */
+    #invoice-table tbody tr td {
+        display: flex;
+        align-items: center;
+        padding: 9px 14px !important;
+        border-bottom: 1px solid var(--border);
+        font-size: 13px !important;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    /* Checkbox cell — tiny strip at top */
+    #invoice-table tbody tr td:nth-child(1) {
+        padding: 8px 14px !important;
+        background: var(--bg-color);
+        gap: 8px;
+        border-bottom: 1px solid var(--border);
+    }
+    #invoice-table tbody tr td:nth-child(1)::before {
+        content: "Pilih";
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        min-width: 55px;
+    }
+
+    /* Invoice No cell + badge */
+    #invoice-table tbody tr td:nth-child(2) {
+        padding: 12px 14px !important;
+        background: var(--bg-color);
+        border-bottom: 1px solid var(--border);
+        justify-content: space-between;
+    }
+    #invoice-table tbody tr td:nth-child(2) strong {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--text-main);
+    }
+    #invoice-table tbody tr td:nth-child(2) .badge {
+        font-size: 10px !important;
+        padding: 3px 7px !important;
+    }
+
+    /* Client name */
+    #invoice-table tbody tr td.col-client {
+        display: flex !important;
+        font-size: 13px !important;
+        font-weight: 600 !important;
+        color: var(--text-main) !important;
+        white-space: normal !important;
+        word-break: break-word;
+    }
+    #invoice-table tbody tr td.col-client::before {
+        content: "Klien";
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--text-muted);
+        min-width: 55px;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        flex-shrink: 0;
+    }
+
+    /* Date & Total — labeled rows */
+    #invoice-table tbody tr td[data-label] {
+        display: flex !important;
+    }
+    #invoice-table tbody tr td[data-label]::before {
+        content: attr(data-label);
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--text-muted);
+        min-width: 55px;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        flex-shrink: 0;
+    }
+
+    /* Hidden columns stay hidden */
+    #invoice-table tbody tr td.col-item-desc,
+    #invoice-table tbody tr td.col-created-at { display: none !important; }
+
+    /* Status row */
+    #invoice-table tbody tr td:has(.status-select) {
+        justify-content: flex-start;
+        gap: 8px;
+    }
+    #invoice-table tbody tr td:has(.status-select)::before {
+        content: "Status";
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--text-muted);
+        min-width: 55px;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+    }
+    .status-select {
+        flex: 1;
+        padding: 6px 8px !important;
+        font-size: 12px !important;
+        max-width: 100% !important;
+        border-radius: 8px !important;
+        cursor: pointer;
+    }
+
+    /* Action buttons — strip at the bottom of the card */
+    #invoice-table tbody tr td.action-cell {
+        display: flex !important;
+        padding: 10px 14px !important;
+        background: var(--bg-color);
+        border-top: 1px solid var(--border);
+        border-bottom: none;
+    }
+    #invoice-table tbody tr td.action-cell .action-wrapper {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        gap: 6px;
+        width: 100%;
+    }
+    #invoice-table tbody tr td.action-cell .btn-action {
+        min-width: 36px;
+        height: 36px;
+        padding: 8px !important;
+        font-size: 13px !important;
+        border-radius: 8px;
+        flex: none;
+    }
+
+    /* Compact pagination */
+    .pagination-container { gap: 6px; padding: 1rem 0; }
+    .total-info { margin-left: 0; font-size: 0.78rem; }
+}
+
 
 /* Base Adjustments for Tables */
 .table-container { 
