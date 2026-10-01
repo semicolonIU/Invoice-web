@@ -1966,31 +1966,45 @@ window.nativeShare = async function(id) {
     const invoice = currentInvoices.find(inv => inv.$id === id) || 
                     statsData.find(inv => inv.$id === id) || 
                     (searchFilteredData && searchFilteredData.find(inv => inv.$id === id));
-    if(!invoice) return;
-    
+    if (!invoice) { notify('Data invoice tidak ditemukan.', 'warning'); return; }
+
+    notify('⏳ Menyiapkan PDF untuk dibagikan...', 'info', 8000);
+
     try {
         const { blob, title } = await window.generatePDF(invoice, 'share');
         const file = new File([blob], title, { type: 'application/pdf' });
-        
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-            await navigator.share({
-                files: [file],
-                title: 'Invoice / Tagihan ' + invoice.NoInvoice,
-                text: 'Berikut adalah dokumen cetak tagihan (Invoice) terlampir.'
-            });
-            
-            if (invoice.paymentStatus === 'pending') {
-                updatePaymentStatus(id, 'paid');
+
+        const canShare = navigator.canShare && navigator.canShare({ files: [file] });
+
+        if (canShare) {
+            try {
+                await navigator.share({
+                    files: [file],
+                    title: 'Invoice / Tagihan ' + invoice.NoInvoice,
+                    text: 'Berikut adalah dokumen cetak tagihan (Invoice) terlampir.'
+                });
+                if (invoice.paymentStatus === 'pending') {
+                    updatePaymentStatus(id, 'paid');
+                }
+                ActivityLog.add('share_pdf', `PDF dibagikan: ${invoice.NoInvoice}`, `Klien: ${Array.isArray(invoice.clientName) ? invoice.clientName[0] : invoice.clientName}`);
+                notify('✅ PDF berhasil dibagikan!', 'success');
+            } catch (shareErr) {
+                if (shareErr.name === 'AbortError') return; // User cancel — diam saja
+                // Share gagal (gesture timeout) → fallback download
+                notify('Share diblokir browser. Mengunduh PDF...', 'warning', 3000);
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = title;
+                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(url), 2000);
             }
-            ActivityLog.add('share_pdf', `PDF dibagikan: ${invoice.NoInvoice}`, `Klien: ${Array.isArray(invoice.clientName) ? invoice.clientName[0] : invoice.clientName}`);
         } else {
-            notify('Browser/Ponsel Anda tidak mendukung share file PDF. Mengunduh file...', 'warning');
+            // Fallback: langsung download
+            notify('Browser tidak mendukung share file. Mengunduh PDF...', 'warning', 3000);
             await window.generatePDF(invoice, 'download');
         }
     } catch (e) {
-        if (e.name !== 'AbortError') {
-            notify('Gagal membagikan dokumen: ' + e.message, 'error');
-        }
+        notify('Gagal membuat PDF: ' + e.message, 'error');
     }
 }
 
@@ -2070,7 +2084,9 @@ window.shareBatchPDF = async function() {
         return;
     }
 
-    notify(`Menyiapkan ${selectedDocs.length} file PDF...`, 'info', 6000);
+    // Untuk 1 invoice — coba share langsung per file
+    // Untuk banyak invoice — share files[] atau fallback download satu-satu
+    notify(`⏳ Menyiapkan ${selectedDocs.length} PDF, mohon tunggu...`, 'info', 10000);
 
     try {
         const files = [];
@@ -2079,24 +2095,54 @@ window.shareBatchPDF = async function() {
             files.push(new File([blob], title, { type: 'application/pdf' }));
         }
 
-        if (navigator.canShare && navigator.canShare({ files })) {
-            await navigator.share({
-                files,
-                title: `${files.length} Dokumen Invoice PBM`,
-                text: `Berikut terlampir ${files.length} dokumen tagihan (Invoice).`
-            });
-            ActivityLog.add('share_pdf', `Bagikan ${files.length} PDF sekaligus`, `Invoice: ${selectedDocs.map(d => d.NoInvoice).join(', ')}`);
-            notify(`${files.length} PDF berhasil dibagikan!`, 'success');
+        // Cek apakah Web Share API tersedia dan mendukung file
+        const canShareFiles = navigator.canShare && navigator.canShare({ files });
+
+        if (canShareFiles) {
+            try {
+                await navigator.share({
+                    files,
+                    title: `${files.length} Dokumen Invoice PBM`,
+                    text: `Berikut terlampir ${files.length} dokumen tagihan (Invoice).`
+                });
+                ActivityLog.add('share_pdf', `Bagikan ${files.length} PDF sekaligus`, `Invoice: ${selectedDocs.map(d => d.NoInvoice).join(', ')}`);
+                notify(`✅ ${files.length} PDF berhasil dibagikan!`, 'success');
+            } catch (shareErr) {
+                if (shareErr.name === 'AbortError') {
+                    // User menutup share dialog — tidak perlu error
+                    return;
+                }
+                // Gagal share (kemungkinan gesture sudah habis) → fallback download
+                notify('Share diblokir browser. Mengunduh PDF...', 'warning', 4000);
+                await _downloadFilesSequentially(files, selectedDocs);
+            }
         } else {
-            notify('Browser tidak mendukung berbagi banyak file sekaligus. Mengunduh satu per satu...', 'warning');
-            await window.downloadBatchPDF();
+            // Browser tidak mendukung share file (Chrome desktop, beberapa browser)
+            notify('Browser tidak mendukung berbagi file. Mengunduh PDF satu per satu...', 'warning', 4000);
+            await _downloadFilesSequentially(files, selectedDocs);
         }
     } catch (e) {
-        if (e.name !== 'AbortError') {
-            notify('Gagal membagikan PDF: ' + e.message, 'error');
-        }
+        notify('Gagal membuat PDF: ' + e.message, 'error');
     }
 };
+
+// Helper: unduh array File objects satu per satu
+async function _downloadFilesSequentially(files, docs) {
+    for (let i = 0; i < files.length; i++) {
+        const url = URL.createObjectURL(files[i]);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = files[i].name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        if (i < files.length - 1) await new Promise(r => setTimeout(r, 500));
+    }
+    ActivityLog.add('download_pdf', `Unduh ${files.length} PDF batch`, `Invoice: ${docs.map(d => d.NoInvoice).join(', ')}`);
+    notify(`✅ ${files.length} PDF selesai diunduh!`, 'success');
+}
+
 
 window.downloadBatchPDF = async function() {
     const selectedIds = Array.from(selectedInvoiceIds);
